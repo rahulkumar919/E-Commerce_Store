@@ -4,7 +4,7 @@ const userModel = require("../models/userModel");
 
 const verifyEmail = async (req, res) => {
   try {
-    const { code } = req.body;
+    const {email , otp} = req.body;
     const user = await userModel.findOne({
       verificationCode: code,
     });

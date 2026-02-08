@@ -10,7 +10,7 @@ const connectDB = require("./config/db");
 const app = express();
 
 app.use(cors({
-  origin: "http://localhost:5173", 
+  origin: "https://e-commerce-frontened-mauve.vercel.app", 
   credentials: true,               // ✅ allow cookies
 }));
 

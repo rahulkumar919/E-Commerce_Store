@@ -67,7 +67,7 @@ async function verifyOtpController(req, res) {
     if (!record)
       return res.status(400).json({ success: false, message: "OTP expired or not found" });
 
-    if (email.otp !== otp)
+    if (record.otp !== otp)
       return res.status(400).json({ success: false, message: "Invalid OTP" });
 
     // ✅ OTP verified — create user

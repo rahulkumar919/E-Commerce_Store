@@ -18,12 +18,8 @@ const getAllProduct = require("../controller/product/getAllproduct");
 const deleteProduct = require("../controller/product/deleteProduct");
 const getCategoryProduct = require("../controller/product/getCatogoryProduct");
 const { sendOtpController, verifyOtpController, resendOtpController } = require("../controller/user/otpController");
+const googleAuthController = require("../controller/user/googleAuth");
 
-const { SendEmail } = require("../config/email");
-const verificationEmail = require("../config/sendCode");
-const ResendOtp = require("../config/resetOtp");
-const verifyEmail = require("../config/verifyEmail");
-const SendOtp = require("../config/sendCode");
 const getCategoryWiseProduct = require("../controller/product/getCategoryWiseProduct");
 const countAddToCartProduct = require("../controller/user/countAddToCart");
 const searchProduct = require("../controller/product/searchProduct");
@@ -44,6 +40,9 @@ router.get("/userLogout", useLogout);
 router.post("/send-otp", sendOtpController);
 router.post("/verify-otp", verifyOtpController);
 router.post("/resend-otp", resendOtpController);
+
+// Google Auth
+router.post("/google-auth", googleAuthController);
 
 
 // --------------------------- ADMIN ROUTES ---------------------------
