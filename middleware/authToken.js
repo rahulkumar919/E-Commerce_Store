@@ -17,7 +17,7 @@ async function authToken(req, res, next) {
 
     // If no token found
     if (!token) {
-      console.log("❌ No token found in request");
+      console.log("No token found in request");
       return res.status(401).json({
         message: "Please login to continue",
         error: true,
@@ -68,7 +68,7 @@ async function authToken(req, res, next) {
       //  Attach to request
       req.userId = user._id.toString();
       req.user = user;
-      console.log("✅ Authenticated User:", user.email, "| Role:", user.role);
+      console.log("Authenticated User:", user.email, "| Role:", user.role);
 
       next();
     });

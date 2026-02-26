@@ -8,7 +8,7 @@ const productData = async (req, res) => {
 
     const session = req.userId;
 
-    // 🔐 Permission check
+    // Permission check
     const isAllowed = await permissionProduct(session);
     if (!isAllowed) {
       console.log(" Permission Denied for userId:", session);

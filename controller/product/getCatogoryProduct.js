@@ -1,21 +1,31 @@
 const productModel = require("../../models/productModel");
 
 const getCategoryProduct = async (req, res) => {
+
   try {
+
     // Step 1: Get distinct categories
+
+
     const productCategories = await productModel.distinct("category");
-    console.log("Categories:", productCategories);
+    console.log(" Available Categories:", productCategories);
+
 
     // Step 2: Array to store one product from each category
+    
     const productByCategory = [];
 
     // Step 3: Loop through all categories
+
     for (const category of productCategories) {
       const product = await productModel.findOne({ category }); // find one product of that category
       if (product) {
         productByCategory.push(product);
+        console.log(` Found product for category: ${category}`);
       }
     }
+
+    console.log(` Total categories with products: ${productByCategory.length}`);
 
     // Step 4: Send response to frontend
     res.json({
@@ -26,7 +36,7 @@ const getCategoryProduct = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error:", err.message);
+    console.error(" Error:", err.message);
     res.status(500).json({
       message: err.message || "Internal server error",
       success: false,

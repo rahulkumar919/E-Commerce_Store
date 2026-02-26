@@ -1,8 +1,12 @@
 const productModel = require("../../models/productModel");
 
-const getProductById = async (req, res) => {
+const getProductById = async (req , res) => {
+  
   try {
+
+
     const { id } = req.params;
+
 
     const product = await productModel.findById(id);
 
