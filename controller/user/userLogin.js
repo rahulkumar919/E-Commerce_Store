@@ -24,7 +24,7 @@ async function usersigninController(req, res) {
       const tokenData = {
         _id: user._id,
         email: user.email,
-        
+
       };
 
       const token = await jwt.sign(tokenData, process.env.TOKEN_SECRET_KEY, {
@@ -34,6 +34,7 @@ async function usersigninController(req, res) {
       const tokenOption = {
         httpOnly: true,
         secure: true,
+        sameSite: 'none'
       };
       res.cookie("token", token, tokenOption).status(201).json({
         message: "Login SuccessFully",
