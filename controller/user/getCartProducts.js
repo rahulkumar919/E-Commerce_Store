@@ -13,28 +13,16 @@ const getCartProducts = async (req, res) => {
       });
     }
 
-    // Get all cart items for the user
-    const cartItems = await addToCart.find({ userId: currentUser });
+    // Get all cart items and populate product details
+    const cartItems = await addToCart.find({ userId: currentUser }).populate("productId");
 
-    // Manually populate product details
-    const cartWithProducts = await Promise.all(
-      cartItems.map(async (item) => {
-        const product = await Product.findById(item.productId);
-        return {
-          _id: item._id,
-          productId: product,
-          quantity: item.quantity,
-          userId: item.userId,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-        };
-      })
-    );
+    // Filter out items where the product was deleted (productId is null)
+    const validCartItems = cartItems.filter(item => item.productId != null);
 
     res.json({
       success: true,
       error: false,
-      data: cartWithProducts,
+      data: validCartItems,
       message: "Cart items fetched successfully",
     });
 

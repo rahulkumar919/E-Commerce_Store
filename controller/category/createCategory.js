@@ -2,7 +2,17 @@ const Category = require("../../models/categoryModel");
 
 const createCategory = async (req, res) => {
   try {
-    const { name, description, image } = req.body;
+    const { 
+      name, 
+      slug, 
+      description, 
+      metaDescription, 
+      image, 
+      sortOrder, 
+      showInNavbar, 
+      isActive,
+      parentCategory 
+    } = req.body;
     const currentUser = req.user?._id || req.userId;
 
     if (!name) {
@@ -13,12 +23,12 @@ const createCategory = async (req, res) => {
       });
     }
 
-    // Create slug from name
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    // Create slug from name if not provided
+    const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
     // Check if category already exists
     const existingCategory = await Category.findOne({ 
-      $or: [{ name }, { slug }] 
+      $or: [{ name }, { slug: categorySlug }] 
     });
 
     if (existingCategory) {
@@ -31,9 +41,14 @@ const createCategory = async (req, res) => {
 
     const newCategory = new Category({
       name,
-      slug,
+      slug: categorySlug,
       description: description || "",
+      metaDescription: metaDescription || "",
       image: image || "",
+      sortOrder: sortOrder || 0,
+      showInNavbar: showInNavbar !== undefined ? showInNavbar : true,
+      isActive: isActive !== undefined ? isActive : true,
+      parentCategory: parentCategory || null,
       createdBy: currentUser,
     });
 

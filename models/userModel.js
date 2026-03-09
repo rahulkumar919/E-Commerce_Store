@@ -20,7 +20,20 @@ const userSchema = new mongoose.Schema({
   },
   password: String,
   profilePic: String,
-  role: String
+  role: String,
+  mobile: {
+    type: String,
+    default: ""
+  },
+  gender: {
+    type: String,
+    enum: ["Male", "Female", "Other", "Rather not say", ""],
+    default: ""
+  },
+  dateOfBirth: {
+    type: String,
+    default: ""
+  }
 }, {
   timestamps: true
 });

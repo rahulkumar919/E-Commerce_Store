@@ -17,7 +17,7 @@ const verifyPayment = async (req, res) => {
 
     // Validate required fields
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      console.error("❌ Missing payment details");
+      console.error(" Missing payment details");
       return res.status(400).json({
         message: "Missing payment details. Payment verification failed.",
         error: true,

@@ -2,7 +2,17 @@ const Category = require("../../models/categoryModel");
 
 const updateCategory = async (req, res) => {
   try {
-    const { _id, name, description, image, isActive } = req.body;
+    const { 
+      _id, 
+      name, 
+      slug, 
+      description, 
+      metaDescription, 
+      image, 
+      sortOrder, 
+      showInNavbar, 
+      isActive 
+    } = req.body;
 
     if (!_id) {
       return res.status(400).json({
@@ -16,11 +26,17 @@ const updateCategory = async (req, res) => {
     
     if (name) {
       updateData.name = name;
-      updateData.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      // Use provided slug or generate from name
+      updateData.slug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    } else if (slug) {
+      updateData.slug = slug;
     }
     
     if (description !== undefined) updateData.description = description;
+    if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
     if (image !== undefined) updateData.image = image;
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+    if (showInNavbar !== undefined) updateData.showInNavbar = showInNavbar;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const updatedCategory = await Category.findByIdAndUpdate(

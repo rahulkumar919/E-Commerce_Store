@@ -16,7 +16,12 @@ async function googleAuthController(req, res) {
     let user = await userModel.findOne({ email });
 
     if (user) {
-      // User exists, log them in
+      // User exists, update profile pic if provided and log them in
+      if (profilePic && user.profilePic !== profilePic) {
+        user.profilePic = profilePic;
+        await user.save();
+      }
+
       const tokenData = {
         _id: user._id,
         email: user.email,

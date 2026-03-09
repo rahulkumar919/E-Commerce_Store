@@ -19,16 +19,26 @@ const productData = async (req, res) => {
       });
     }
 
-    // ✅ Save Product
-    const productdata = new productModel(req.body);
-    const saveproduct = await productdata.save();
+    // ✅ Save Product(s)
+    if (Array.isArray(req.body)) {
+      const savedProducts = await productModel.insertMany(req.body);
+      res.status(201).json({
+        message: `${savedProducts.length} Products Uploaded Successfully`,
+        success: true,
+        error: false,
+        data: savedProducts,
+      });
+    } else {
+      const productdata = new productModel(req.body);
+      const saveproduct = await productdata.save();
 
-    res.status(201).json({
-      message: "Product Data Uploaded Successfully",
-      success: true,
-      error: false,
-      data: saveproduct,
-    });
+      res.status(201).json({
+        message: "Product Data Uploaded Successfully",
+        success: true,
+        error: false,
+        data: saveproduct,
+      });
+    }
   } catch (err) {
     console.error("❌ Error uploading product:", err.message);
     res.status(500).json({

@@ -5,11 +5,16 @@ const searchProduct = async (req, res) => {
     const query = req.query.q?.trim() || "";
 
     if (!query) {
+      const trendingProducts = await productModel.find({ isTrending: true })
+        .sort({ createdAt: -1 })
+        .limit(10);
+
       return res.json({
-        data: [],
-        message: "Empty search query",
+        data: trendingProducts,
+        message: "Trending search list",
         success: true,
         error: false,
+        isTrendingList: true
       });
     }
 

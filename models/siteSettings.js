@@ -31,6 +31,14 @@ const siteSettingsSchema = new mongoose.Schema(
       metaDescription: { type: String, default: "Shop quality products at amazing prices" },
       metaKeywords: { type: String, default: "ecommerce, shopping, online store" },
     },
+    showBlogInNav: {
+      type: Boolean,
+      default: true,
+    },
+    showLocationInHeader: {
+      type: Boolean,
+      default: false,
+    },
     updatedBy: {
       type: String,
       ref: "user",

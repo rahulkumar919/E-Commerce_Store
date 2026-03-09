@@ -3,19 +3,60 @@ const SiteSettings = require("../../models/siteSettings");
 const updateSiteSettings = async (req, res) => {
   try {
     const currentUser = req.user?._id || req.userId;
-    const updateData = { ...req.body, updatedBy: currentUser };
+
+    const {
+      siteName,
+      siteEmail,
+      sitePhone,
+      siteAddress,
+      socialLinks,
+      seoSettings,
+      showBlogInNav,
+      showLocationInHeader,
+    } = req.body;
 
     let settings = await SiteSettings.findOne();
 
     if (!settings) {
-      // Create new settings if none exist
-      settings = new SiteSettings(updateData);
-      await settings.save();
-    } else {
-      // Update existing settings
-      Object.assign(settings, updateData);
-      await settings.save();
+      settings = new SiteSettings();
     }
+
+    // Update top-level fields
+    if (siteName !== undefined) settings.siteName = siteName;
+    if (siteEmail !== undefined) settings.siteEmail = siteEmail;
+    if (sitePhone !== undefined) settings.sitePhone = sitePhone;
+    if (siteAddress !== undefined) settings.siteAddress = siteAddress;
+    if (showBlogInNav !== undefined) settings.showBlogInNav = showBlogInNav;
+    if (showLocationInHeader !== undefined) settings.showLocationInHeader = showLocationInHeader;
+
+    // Deep merge nested socialLinks
+    if (socialLinks && typeof socialLinks === "object") {
+      settings.socialLinks = {
+        facebook: socialLinks.facebook ?? settings.socialLinks?.facebook ?? "",
+        twitter: socialLinks.twitter ?? settings.socialLinks?.twitter ?? "",
+        instagram: socialLinks.instagram ?? settings.socialLinks?.instagram ?? "",
+        linkedin: socialLinks.linkedin ?? settings.socialLinks?.linkedin ?? "",
+        youtube: socialLinks.youtube ?? settings.socialLinks?.youtube ?? "",
+        github: socialLinks.github ?? settings.socialLinks?.github ?? "",
+      };
+    }
+
+    // Deep merge nested seoSettings
+    if (seoSettings && typeof seoSettings === "object") {
+      settings.seoSettings = {
+        metaTitle: seoSettings.metaTitle ?? settings.seoSettings?.metaTitle ?? "",
+        metaDescription: seoSettings.metaDescription ?? settings.seoSettings?.metaDescription ?? "",
+        metaKeywords: seoSettings.metaKeywords ?? settings.seoSettings?.metaKeywords ?? "",
+      };
+    }
+
+    settings.updatedBy = currentUser;
+
+    // Use markModified for nested objects so Mongoose detects changes
+    settings.markModified("socialLinks");
+    settings.markModified("seoSettings");
+
+    await settings.save();
 
     res.json({
       success: true,
