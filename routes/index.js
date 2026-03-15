@@ -93,6 +93,9 @@ const verifyPayment = require("../controller/payment/verifyPayment");
 const createCODOrder = require("../controller/payment/createCODOrder");
 const getAllOrders = require("../controller/payment/getAllOrders");
 
+// Order Management Controllers
+const { updateOrderStatus, getAllOrders: getAllOrdersAdmin, getOrderDetails } = require("../controller/order/updateOrderStatus");
+
 
 
 // --------------------------- USER ROUTES ---------------------------
@@ -169,6 +172,11 @@ router.post("/create-order", authToken, createOrder);
 router.post("/verify-payment", authToken, verifyPayment);
 router.post("/create-cod-order", authToken, createCODOrder);
 router.get("/all-orders", authToken, getAllOrders);
+
+// Order Management Routes (Admin)
+router.post("/update-order-status", authToken, updateOrderStatus);
+router.get("/admin-orders", authToken, getAllOrdersAdmin);
+router.get("/order-details/:orderId", authToken, getOrderDetails);
 
 // Trending Search Routes
 router.get("/trending-searches", getTrendingSearches)

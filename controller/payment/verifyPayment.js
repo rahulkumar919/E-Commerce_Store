@@ -1,6 +1,8 @@
 const crypto = require("crypto");
 const Razorpay = require("razorpay");
 const orderModel = require("../../models/orderModel");
+const userModel = require("../../models/userModel");
+const { sendOrderNotification, sendOrderConfirmationToCustomer } = require("../../config/sendOrderEmail");
 
 const verifyPayment = async (req, res) => {
   try {
@@ -142,6 +144,27 @@ const verifyPayment = async (req, res) => {
 
     await newOrder.save();
     console.log("✅ Order saved to database:", newOrder._id);
+
+    // Get user details for email
+    const user = await userModel.findById(req.userId);
+    if (user) {
+      const orderDetails = {
+        orderId: newOrder._id.toString(),
+        orderDate: newOrder.createdAt,
+        totalAmount: orderData.total,
+        paymentMethod: "Online Payment",
+        customerName: user.name || "Customer",
+        customerEmail: user.email,
+        customerMobile: orderData.shippingAddress.phone,
+        shippingAddress: orderData.shippingAddress,
+      };
+
+      // Send emails (non-blocking)
+      Promise.all([
+        sendOrderNotification(orderDetails),
+        sendOrderConfirmationToCustomer(orderDetails),
+      ]).catch((err) => console.error("Email sending error:", err));
+    }
 
     res.status(200).json({
       message: "Payment verified and order placed successfully",
