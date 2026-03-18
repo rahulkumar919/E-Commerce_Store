@@ -83,6 +83,18 @@ const orderSchema = new mongoose.Schema(
       enum: ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"],
       default: "PENDING",
     },
+    estimatedDeliveryHours: {
+      type: Number,
+      default: null, // set by admin when confirming order
+    },
+    estimatedDeliveryAt: {
+      type: Date,
+      default: null, // calculated from confirmedAt + estimatedDeliveryHours
+    },
+    confirmedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

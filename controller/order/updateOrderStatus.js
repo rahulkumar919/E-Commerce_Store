@@ -22,7 +22,7 @@ const sendStatusUpdateEmail = async (orderDetails, newStatus) => {
     };
 
     const mailOptions = {
-      from: `"Digital Shop" <${process.env.SMTP_USER}>`,
+      from: `"STM FRUIT SHOP " <${process.env.SMTP_USER}>`,
       to: orderDetails.customerEmail,
       subject: `Order Status Updated - Order #${orderDetails.orderId}`,
       html: `
@@ -53,8 +53,8 @@ const sendStatusUpdateEmail = async (orderDetails, newStatus) => {
 
             <!-- Footer -->
             <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px; text-align: center; color: #999; font-size: 12px;">
-              <p>Thank you for shopping with Digital Shop!</p>
-              <p>© 2024 Digital Shop. All rights reserved.</p>
+              <p>Thank you for shopping with STM FRUIT SHOP !</p>
+              <p>© 2024 STM FRUIT SHOP . All rights reserved.</p>
             </div>
 
           </div>
@@ -74,9 +74,8 @@ const sendStatusUpdateEmail = async (orderDetails, newStatus) => {
 // Update order status
 const updateOrderStatus = async (req, res) => {
   try {
-    const { orderId, newStatus } = req.body;
+    const { orderId, newStatus, estimatedDeliveryHours } = req.body;
 
-    // Validate input
     if (!orderId || !newStatus) {
       return res.status(400).json({
         message: "Order ID and new status are required",
@@ -85,7 +84,6 @@ const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Validate status
     const validStatuses = ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"];
     if (!validStatuses.includes(newStatus)) {
       return res.status(400).json({
@@ -95,10 +93,22 @@ const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Find and update order
+    // Build update object
+    const updateData = { orderStatus: newStatus };
+
+    // When confirming, set delivery estimate
+    if (newStatus === "CONFIRMED") {
+      const hours = estimatedDeliveryHours || 24; // default 24 hours
+      const confirmedAt = new Date();
+      const estimatedDeliveryAt = new Date(confirmedAt.getTime() + hours * 60 * 60 * 1000);
+      updateData.confirmedAt = confirmedAt;
+      updateData.estimatedDeliveryHours = hours;
+      updateData.estimatedDeliveryAt = estimatedDeliveryAt;
+    }
+
     const order = await orderModel.findByIdAndUpdate(
       orderId,
-      { orderStatus: newStatus },
+      updateData,
       { new: true }
     ).populate("userId");
 
@@ -116,9 +126,10 @@ const updateOrderStatus = async (req, res) => {
         orderId: order._id.toString(),
         customerEmail: order.userId.email,
         totalAmount: order.total,
+        estimatedDeliveryHours: order.estimatedDeliveryHours,
+        estimatedDeliveryAt: order.estimatedDeliveryAt,
       };
 
-      // Send email (non-blocking)
       sendStatusUpdateEmail(orderDetails, newStatus).catch((err) =>
         console.error("Email sending error:", err)
       );

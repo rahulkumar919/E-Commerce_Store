@@ -23,7 +23,7 @@ transporter.verify((error, success) => {
 const sendOrderNotification = async (orderDetails) => {
   try {
     const mailOptions = {
-      from: `"Digital Shop" <${process.env.SMTP_USER}>`,
+      from: `"STM FRUIT SHOP " <${process.env.SMTP_USER}>`,
       to: process.env.ADMIN_EMAIL,
       subject: `🎉 New Order Received - Order #${orderDetails.orderId}`,
       html: `
@@ -31,7 +31,7 @@ const sendOrderNotification = async (orderDetails) => {
           <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             
             <h2 style="color: #e53e3e; margin-top: 0;">🎉 New Order Notification</h2>
-            <p style="color: #666; font-size: 16px;">A new order has been placed on Digital Shop!</p>
+            <p style="color: #666; font-size: 16px;">A new order has been placed on STM FRUIT SHOP !</p>
             
             <!-- Order Details Section -->
             <div style="background: #f0f4f8; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #e53e3e;">
@@ -94,8 +94,8 @@ const sendOrderNotification = async (orderDetails) => {
 
             <!-- Footer -->
             <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px; text-align: center; color: #999; font-size: 12px;">
-              <p>This is an automated email from Digital Shop. Please do not reply to this email.</p>
-              <p>© 2024 Digital Shop. All rights reserved.</p>
+              <p>This is an automated email from STM FRUIT SHOP . Please do not reply to this email.</p>
+              <p>© 2024 STM FRUIT SHOP . All rights reserved.</p>
             </div>
 
           </div>
@@ -116,7 +116,7 @@ const sendOrderNotification = async (orderDetails) => {
 const sendOrderConfirmationToCustomer = async (orderDetails) => {
   try {
     const mailOptions = {
-      from: `"Digital Shop" <${process.env.SMTP_USER}>`,
+      from: `"STM FRUIT SHOP " <${process.env.SMTP_USER}>`,
       to: orderDetails.customerEmail,
       subject: `Order Confirmation - Order #${orderDetails.orderId}`,
       html: `
@@ -146,7 +146,7 @@ const sendOrderConfirmationToCustomer = async (orderDetails) => {
             <!-- Footer -->
             <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px; text-align: center; color: #999; font-size: 12px;">
               <p>We'll send you tracking information once your order ships.</p>
-              <p>© 2024 Digital Shop. All rights reserved.</p>
+              <p>© 2024 STM FRUIT SHOP . All rights reserved.</p>
             </div>
 
           </div>
