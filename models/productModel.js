@@ -66,6 +66,11 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // View tracking for suggestions
+    viewCount: {
+      type: Number,
+      default: 0,
+    },
     // SEO Fields
     metaTitle: {
       type: String,

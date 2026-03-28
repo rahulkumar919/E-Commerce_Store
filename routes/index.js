@@ -86,6 +86,7 @@ const searchProduct = require("../controller/product/searchProduct");
 const getProductById = require("../controller/product/getProductById");
 const getRelatedProducts = require("../controller/product/getRelatedProducts");
 const toggleTrending = require("../controller/product/toggleTrending");
+const { trackProductView, getSuggestedProducts } = require("../controller/product/getSuggestedProducts");
 
 // Payment Controllers
 const createOrder = require("../controller/payment/createOrder");
@@ -166,6 +167,8 @@ router.post("/delete-banner", authToken, deleteBanner)
 router.get("/search", searchProduct)
 router.get("/product-details/:id", getProductById);
 router.get("/related-products", getRelatedProducts);
+router.post("/track-view/:id", trackProductView);
+router.get("/suggested-products", getSuggestedProducts);
 
 // Payment Routes
 router.post("/create-order", authToken, createOrder);
