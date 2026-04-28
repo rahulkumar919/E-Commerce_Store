@@ -1,5 +1,6 @@
 const productModel = require("../../models/productModel");
 const permissionProduct = require("../../helpers/permission");
+const { notifyNewProduct } = require("../../services/notificationService");
 
 const productData = async (req, res) => {
   try {
@@ -22,8 +23,16 @@ const productData = async (req, res) => {
     // ✅ Save Product(s)
     if (Array.isArray(req.body)) {
       const savedProducts = await productModel.insertMany(req.body);
+      
+      // Send notifications for each new product (async, don't wait)
+      savedProducts.forEach((product) => {
+        notifyNewProduct(product).catch(err => 
+          console.error("Notification error:", err)
+        );
+      });
+      
       res.status(201).json({
-        message: `${savedProducts.length} Products Uploaded Successfully`,
+        message: `${savedProducts.length} Products Uploaded Successfully. Notifications sent to users.`,
         success: true,
         error: false,
         data: savedProducts,
@@ -32,8 +41,13 @@ const productData = async (req, res) => {
       const productdata = new productModel(req.body);
       const saveproduct = await productdata.save();
 
+      // Send notifications to all users (async, don't block response)
+      notifyNewProduct(saveproduct).catch(err => 
+        console.error("Notification error:", err)
+      );
+
       res.status(201).json({
-        message: "Product Data Uploaded Successfully",
+        message: "Product Data Uploaded Successfully. Notifications sent to users.",
         success: true,
         error: false,
         data: saveproduct,

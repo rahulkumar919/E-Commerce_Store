@@ -71,6 +71,11 @@ const deleteBrandVideo = require("../controller/brandVideo/deleteBrandVideo")
 // Dashboard Controller
 const getDashboardStats = require("../controller/dashboard/getDashboardStats")
 
+// Service Inquiry Controllers
+const createInquiry = require("../controller/serviceInquiry/createInquiry")
+const getAllInquiries = require("../controller/serviceInquiry/getAllInquiries")
+const updateInquiryStatus = require("../controller/serviceInquiry/updateInquiryStatus")
+
 //  Product Controllers
 const productData = require("../controller/product/productDataController");
 const updateProduct = require("../controller/product/updateProduct");
@@ -210,5 +215,10 @@ router.post("/delete-brand-video", authToken, deleteBrandVideo)
 
 // Dashboard Route
 router.get("/dashboard-stats", authToken, getDashboardStats)
+
+// Service Inquiry Routes
+router.post("/create-inquiry", createInquiry)
+router.get("/all-inquiries", authToken, getAllInquiries)
+router.post("/update-inquiry-status", authToken, updateInquiryStatus)
 
 module.exports = router;

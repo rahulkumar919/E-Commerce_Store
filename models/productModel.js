@@ -30,6 +30,18 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    reviews: [
+      {
+        reviewerName: String,
+        reviewerImage: String,
+        rating: Number,
+        comment: String,
+        date: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     // Offers & Badges
     offerText: {
       type: String,

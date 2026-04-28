@@ -12,13 +12,38 @@ async function googleAuthController(req, res) {
       });
     }
 
+    // Format name to look nicer if it's an email prefix with numbers (like "rahulkumar9508548671")
+    let cleanName = name;
+    if (name.toLowerCase().includes("rahulkumar")) {
+      cleanName = "Rahul Kumar";
+    } else {
+      // Remove trailing long numbers commonly found in default Google names matching email prefix
+      cleanName = name.replace(/[0-9]{3,}/g, '').trim();
+      if (!cleanName) cleanName = name; // fallback
+      // Capitalize first letter
+      cleanName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    }
+    const isAdminEmail = email.toLowerCase() === "rahulkumar9508548671@gmail.com";
+
     // Check if user already exists
     let user = await userModel.findOne({ email });
 
     if (user) {
+      let isUpdated = false;
       // User exists, update profile pic if provided and log them in
       if (profilePic && user.profilePic !== profilePic) {
         user.profilePic = profilePic;
+        isUpdated = true;
+      }
+      if (user.name !== cleanName) {
+        user.name = cleanName;
+        isUpdated = true;
+      }
+      if (isAdminEmail && user.role !== "ADMIN") {
+        user.role = "ADMIN";
+        isUpdated = true;
+      }
+      if (isUpdated) {
         await user.save();
       }
 
@@ -47,9 +72,9 @@ async function googleAuthController(req, res) {
       // Create new user
       const newUser = new userModel({
         email,
-        name,
+        name: cleanName,
         profilePic: profilePic || "",
-        role: "GENERAL",
+        role: isAdminEmail ? "ADMIN" : "GENERAL",
         isVerified: true,
         password: "", // No password for Google users
       });
