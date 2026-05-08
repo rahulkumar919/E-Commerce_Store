@@ -221,4 +221,21 @@ router.post("/create-inquiry", createInquiry)
 router.get("/all-inquiries", authToken, getAllInquiries)
 router.post("/update-inquiry-status", authToken, updateInquiryStatus)
 
+// AI RAG System Routes
+const processKnowledgeController = require("../controller/ai/processKnowledge")
+const chatWithAI = require("../controller/ai/chatWithAI")
+const processKnowledgePineconeController = require("../controller/ai/processKnowledgePinecone")
+const chatWithAIPinecone = require("../controller/ai/chatWithAIPinecone")
+const chatWithAIEnhanced = require("../controller/ai/chatWithAIEnhanced")
+
+router.post("/ai/process-knowledge", authToken, processKnowledgeController) // Admin only - process knowledge base (MongoDB)
+router.post("/ai/chat", chatWithAI) // Public - chat with AI assistant (MongoDB)
+
+// Pinecone-powered endpoints (Better performance)
+router.post("/ai/process-knowledge-pinecone", authToken, processKnowledgePineconeController) // Admin only - process to Pinecone
+router.post("/ai/chat-pinecone", chatWithAIPinecone) // Public - chat with Pinecone backend
+
+// Enhanced RAG endpoint (BEST - Pinecone + MongoDB + Gemini)
+router.post("/ai/chat-enhanced", chatWithAIEnhanced) // Public - Enhanced RAG with best performance
+
 module.exports = router;

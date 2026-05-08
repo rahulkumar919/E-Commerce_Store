@@ -13,23 +13,36 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5174",
   "https://e-commerce-fronted-gamma.vercel.app",
+  "https://e-commerce-store-inky-nine.vercel.app",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
-    // Remove trailing slash for comparison
+    
+    // Normalize origin by removing trailing slash
     const normalizedOrigin = origin.replace(/\/$/, "");
-    if (allowedOrigins.some(allowed => normalizedOrigin === allowed.replace(/\/$/, ""))) {
+    
+    // Check if origin is in allowed list
+    const isAllowed = allowedOrigins.some(allowed => {
+      const normalizedAllowed = allowed.replace(/\/$/, "");
+      return normalizedOrigin === normalizedAllowed;
+    });
+    
+    if (isAllowed) {
       return callback(null, true);
     }
+    
+    console.log("❌ CORS blocked origin:", origin);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["Set-Cookie"],
+  maxAge: 86400, // 24 hours
 }));
 
 
