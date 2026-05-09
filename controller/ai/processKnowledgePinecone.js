@@ -1,13 +1,13 @@
 /**
- * Process Knowledge Base to Pinecone Controller
+ * Process Knowledge Base to Pinecone Controller (Legacy - Redirects to Enhanced)
  * Admin endpoint to process and store knowledge base in Pinecone
  */
 
-const { processKnowledgeBaseToPinecone } = require('../../services/ragServicePinecone');
+const { processKnowledgeBaseToPinecone } = require('../../services/enhancedRAGService');
 
 async function processKnowledgePineconeController(req, res) {
     try {
-        console.log("🚀 Starting Pinecone knowledge base processing...");
+        console.log("🚀 Starting Pinecone knowledge base processing (Enhanced)...");
         
         const result = await processKnowledgeBaseToPinecone();
         

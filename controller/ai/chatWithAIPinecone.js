@@ -1,10 +1,10 @@
 /**
- * AI Chat Controller with Pinecone
- * Handles user queries using Pinecone vector search and LangChain
+ * AI Chat Controller with Pinecone (Legacy - Redirects to Enhanced)
+ * This endpoint now uses the enhanced RAG service
  */
 
 const productModel = require('../../models/productModel');
-const { generateRAGResponsePinecone, conversationMemory } = require('../../services/ragServicePinecone');
+const { generateEnhancedRAGResponse } = require('../../services/enhancedRAGService');
 
 async function chatWithAIPinecone(req, res) {
     try {
@@ -17,23 +17,14 @@ async function chatWithAIPinecone(req, res) {
             });
         }
         
-        console.log("💬 User Query:", query);
+        console.log("💬 User Query (Pinecone endpoint):", query);
+        console.log("⚠️ Redirecting to enhanced RAG service");
         
-        // Add to conversation memory (optional)
-        if (userId) {
-            conversationMemory.addMessage(userId, 'user', query);
-        }
-        
-        // Generate RAG response
-        const response = await generateRAGResponsePinecone(
+        // Use enhanced RAG service instead
+        const response = await generateEnhancedRAGResponse(
             query,
             productModel
         );
-        
-        // Add AI response to memory (optional)
-        if (userId) {
-            conversationMemory.addMessage(userId, 'assistant', response.message);
-        }
         
         res.json(response);
         
