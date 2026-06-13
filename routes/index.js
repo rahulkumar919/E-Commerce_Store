@@ -227,6 +227,8 @@ const chatWithAI = require("../controller/ai/chatWithAI")
 const processKnowledgePineconeController = require("../controller/ai/processKnowledgePinecone")
 const chatWithAIPinecone = require("../controller/ai/chatWithAIPinecone")
 const chatWithAIEnhanced = require("../controller/ai/chatWithAIEnhanced")
+const chatWithRAG = require("../controller/ai/chatWithRAG")
+const processPDF = require("../controller/ai/processPDF")
 
 router.post("/ai/process-knowledge", authToken, processKnowledgeController) // Admin only - process knowledge base (MongoDB)
 router.post("/ai/chat", chatWithAI) // Public - chat with AI assistant (MongoDB)
@@ -237,5 +239,13 @@ router.post("/ai/chat-pinecone", chatWithAIPinecone) // Public - chat with Pinec
 
 // Enhanced RAG endpoint (BEST - Pinecone + MongoDB + Gemini)
 router.post("/ai/chat-enhanced", chatWithAIEnhanced) // Public - Enhanced RAG with best performance
+
+// Professional RAG System (PDF-based, Most Powerful)
+router.post("/ai/process-pdf", authToken, processPDF) // Admin only - process PDF to Pinecone
+router.post("/ai/chat-rag", chatWithRAG) // Public - Professional RAG chat
+
+// ✅ LangChain RAG System (Best — PDF → Pinecone → Gemini 2.0 Flash)
+const chatWithLangchainRAG = require("../controller/ai/chatWithLangchainRAG")
+router.post("/ai/chat-langchain", chatWithLangchainRAG) // Public - Full LangChain RAG
 
 module.exports = router;

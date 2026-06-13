@@ -12,7 +12,8 @@ const transporter = nodemailer.createTransport({
 
 const createInquiry = async (req, res) => {
   try {
-    const { fullName, email, phone, service, budgetRange, projectDetails } = req.body;
+    const { fullName, email, phone, service, budgetRange, projectDetails } =
+      req.body;
 
     // Validate required fields
     if (!fullName || !email || !phone || !service || !projectDetails) {
@@ -81,12 +82,16 @@ const createInquiry = async (req, res) => {
               <div class="value">${phone}</div>
             </div>
 
-            ${budgetRange ? `
+            ${
+              budgetRange
+                ? `
             <div class="info-row">
               <div class="label">Budget Range:</div>
               <div class="value">${budgetRange}</div>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
 
             <div class="info-row">
               <div class="label">Project Details:</div>
@@ -100,14 +105,14 @@ const createInquiry = async (req, res) => {
 
             <div class="info-row">
               <div class="label">Received At:</div>
-              <div class="value">${new Date(savedInquiry.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+              <div class="value">${new Date(savedInquiry.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</div>
             </div>
           </div>
           
           <div class="footer">
             <p><strong>STM FRUIT SHOP</strong></p>
             <p>Service Inquiry Management System</p>
-            <p>📞 +91 9508548671 | 📧 rahulkumar9508548671@gmail.com</p>
+            <p>📞 +91 9142517255 | 📧 rahulkumar9508548671@gmail.com</p>
           </div>
         </div>
       </body>
@@ -134,19 +139,19 @@ const createInquiry = async (req, res) => {
 *Name:* ${fullName}
 *Email:* ${email}
 *Phone:* ${phone}
-${budgetRange ? `*Budget:* ${budgetRange}` : ''}
+${budgetRange ? `*Budget:* ${budgetRange}` : ""}
 
 *Project Details:*
 ${projectDetails}
 
 *Inquiry ID:* ${savedInquiry._id}
-*Time:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+*Time:* ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
 
 _Check admin panel for more details_`;
 
     console.log("📱 WhatsApp notification prepared:");
     console.log(whatsappMessage);
-    console.log(`Send to: +919508548671`);
+    console.log(`Send to: +919142517255`);
 
     res.status(201).json({
       message: "Inquiry submitted successfully! We'll contact you soon.",

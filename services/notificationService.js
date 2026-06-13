@@ -15,7 +15,7 @@ const sendNewProductEmail = async (product) => {
   try {
     // Get all users with valid emails
     const users = await userModel.find({ email: { $exists: true, $ne: "" } });
-    
+
     if (users.length === 0) {
       console.log("No users found to notify");
       return;
@@ -69,22 +69,30 @@ const sendNewProductEmail = async (product) => {
                 ${product.price > product.selling ? `<span class="old-price">₹${product.price}</span>` : ""}
               </div>
               
-              ${product.price > product.selling ? `
+              ${
+                product.price > product.selling
+                  ? `
                 <span class="discount">
                   ${Math.round(((product.price - product.selling) / product.price) * 100)}% OFF
                 </span>
-              ` : ""}
+              `
+                  : ""
+              }
               
-              ${product.description ? `
+              ${
+                product.description
+                  ? `
                 <div class="description">${product.description}</div>
-              ` : ""}
+              `
+                  : ""
+              }
               
               <div style="text-align: center; margin-top: 20px;">
                 <a href="${productUrl}" class="cta-button">View Product</a>
               </div>
               
               <div style="text-align: center;">
-                <a href="https://wa.me/919508548671?text=${encodeURIComponent(`Hi! I'm interested in ${product.productName} priced at ₹${product.selling}`)}" class="whatsapp-btn">
+                <a href="https://wa.me/919142517255?text=${encodeURIComponent(`Hi! I'm interested in ${product.productName} priced at ₹${product.selling}`)}" class="whatsapp-btn">
                   📱 Order on WhatsApp
                 </a>
               </div>
@@ -100,7 +108,7 @@ const sendNewProductEmail = async (product) => {
           <div class="footer">
             <p><strong>STM FRUIT SHOP</strong></p>
             <p>Fresh & Natural Products | Sitamarhi, Bihar</p>
-            <p>📞 +91 9508548671 | 📧 rahulkumar9508548671@gmail.com</p>
+            <p>📞 +91 9142517255 | 📧 rahulkumar9508548671@gmail.com</p>
             <p style="font-size: 12px; color: #a0aec0; margin-top: 15px;">
               You're receiving this because you're a valued customer of STM FRUIT SHOP.
             </p>
@@ -114,7 +122,7 @@ const sendNewProductEmail = async (product) => {
     const batchSize = 10;
     for (let i = 0; i < users.length; i += batchSize) {
       const batch = users.slice(i, i + batchSize);
-      
+
       const emailPromises = batch.map((user) => {
         return transporter.sendMail({
           from: `"STM FRUIT SHOP 🍎" <${process.env.SMTP_USER}>`,
@@ -125,14 +133,16 @@ const sendNewProductEmail = async (product) => {
       });
 
       await Promise.allSettled(emailPromises);
-      
+
       // Wait 1 second between batches to avoid rate limiting
       if (i + batchSize < users.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
-    console.log(`✅ Email notifications sent to ${users.length} users for product: ${product.productName}`);
+    console.log(
+      `✅ Email notifications sent to ${users.length} users for product: ${product.productName}`,
+    );
     return { success: true, count: users.length };
   } catch (error) {
     console.error("❌ Error sending email notifications:", error);
@@ -146,14 +156,14 @@ const sendNewProductWhatsApp = async (product) => {
   try {
     // Get all users with valid mobile numbers
     const users = await userModel.find({ mobile: { $exists: true, $ne: "" } });
-    
+
     if (users.length === 0) {
       console.log("No users with mobile numbers found");
       return;
     }
 
     const productUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/product-details/${product._id}`;
-    
+
     // WhatsApp message template
     const message = `
 🎉 *New Product Alert from STM FRUIT SHOP!*
@@ -170,25 +180,25 @@ ${product.stock > 0 ? "✅ In Stock" : "⚠️ Limited Stock"}
 
 👉 View Product: ${productUrl}
 
-📞 Order Now: +91 9508548671
+📞 Order Now: +91 9142517255
 
 _Fresh & Natural Products | Sitamarhi, Bihar_
     `.trim();
 
     console.log(`📱 WhatsApp notification prepared for ${users.length} users`);
     console.log("Message template:", message);
-    
+
     // TODO: Integrate with WhatsApp Business API or Twilio
     // For now, we'll just log the notification
     // You can integrate with services like:
     // 1. Twilio WhatsApp API
     // 2. WhatsApp Business API
     // 3. Third-party services like WATI, Interakt, etc.
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       count: users.length,
-      message: "WhatsApp notifications prepared (requires API integration)"
+      message: "WhatsApp notifications prepared (requires API integration)",
     };
   } catch (error) {
     console.error("❌ Error preparing WhatsApp notifications:", error);
@@ -198,13 +208,15 @@ _Fresh & Natural Products | Sitamarhi, Bihar_
 
 // Main notification function
 const notifyNewProduct = async (product) => {
-  console.log(`\n🔔 Sending notifications for new product: ${product.productName}`);
-  
+  console.log(
+    `\n🔔 Sending notifications for new product: ${product.productName}`,
+  );
+
   const results = {
     email: await sendNewProductEmail(product),
     whatsapp: await sendNewProductWhatsApp(product),
   };
-  
+
   console.log("Notification Results:", results);
   return results;
 };

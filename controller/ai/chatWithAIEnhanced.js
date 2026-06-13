@@ -30,7 +30,7 @@ async function chatWithAIEnhanced(req, res) {
                 productModel
             );
             
-            console.log("✅ Enhanced response generated successfully\n");
+            console.log(" Enhanced response generated successfully\n");
             res.json(response);
             
         } catch (enhancedError) {

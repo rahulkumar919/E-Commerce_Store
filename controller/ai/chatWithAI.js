@@ -18,7 +18,7 @@ async function chatWithAI(req, res) {
             });
         }
         
-        console.log("💬 User Query:", query);
+        console.log("User Query:", query);
         
         // Generate RAG response
         const response = await generateRAGResponse(
