@@ -1,51 +1,63 @@
 const Category = require("../../models/categoryModel");
 const Product = require("../../models/productModel");
+const cache = require("../../config/redis");
 
 const getAllCategories = async (req, res) => {
   try {
     const { includeSubcategories } = req.query;
+    const cacheKey = `categories:all:${includeSubcategories === "true" ? "with_sub" : "plain"}`;
+
+    // Try cache first
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, error: false, data: cached, message: "Categories fetched (cache)", fromCache: true });
+    }
 
     // Get all categories sorted by sortOrder (ascending) then name
-    const categories = await Category.find().sort({ sortOrder: 1, name: 1 });
+    const categories = await Category.find().sort({ sortOrder: 1, name: 1 }).lean();
 
-    // Get product count for each category
-    const categoriesWithCount = await Promise.all(
-      categories.map(async (category) => {
-        const productCount = await Product.countDocuments({ 
-          category: category.name 
-        });
-        
-        const categoryObj = {
-          ...category.toObject(),
-          productCount,
-        };
+    if (includeSubcategories !== "true") {
+      // Simple path — no subcategory enrichment needed
+      await cache.set(cacheKey, categories, 300); // cache 5 min
+      return res.json({ success: true, error: false, data: categories, message: "Categories fetched successfully" });
+    }
 
-        // If includeSubcategories is true, get subcategories
-        if (includeSubcategories === 'true') {
-          const subcategories = await Category.find({ 
-            parentCategory: category._id 
-          }).sort({ sortOrder: 1, name: 1 });
-          
-          // Get product count for each subcategory
-          const subcategoriesWithCount = await Promise.all(
-            subcategories.map(async (subcat) => {
-              const subProductCount = await Product.countDocuments({ 
-                category: subcat.name 
-              });
-              return {
-                ...subcat.toObject(),
-                productCount: subProductCount,
-              };
-            })
-          );
-          
-          categoryObj.subcategories = subcategoriesWithCount;
-          categoryObj.hasSubcategories = subcategoriesWithCount.length > 0;
-        }
+    // Batch fetch all product counts & subcategories in parallel
+    const allParentIds = categories.filter(c => !c.parentCategory).map(c => c._id);
 
-        return categoryObj;
-      })
-    );
+    const [productCounts, subcategoryMap] = await Promise.all([
+      // Single aggregation for all category product counts
+      Product.aggregate([
+        { $group: { _id: { $toLower: "$category" }, count: { $sum: 1 } } }
+      ]),
+      // All subcategories in one query
+      Category.find({ parentCategory: { $in: allParentIds } })
+        .sort({ sortOrder: 1, name: 1 })
+        .lean()
+    ]);
+
+    // Build lookup maps
+    const countMap = {};
+    productCounts.forEach(pc => { countMap[pc._id] = pc.count; });
+
+    const subMap = {};
+    subcategoryMap.forEach(sub => {
+      const pid = sub.parentCategory.toString();
+      if (!subMap[pid]) subMap[pid] = [];
+      subMap[pid].push({
+        ...sub,
+        productCount: countMap[sub.name?.toLowerCase()] || 0,
+      });
+    });
+
+    const categoriesWithCount = categories.map(category => ({
+      ...category,
+      productCount: countMap[category.name?.toLowerCase()] || 0,
+      subcategories: subMap[category._id?.toString()] || [],
+      hasSubcategories: !!(subMap[category._id?.toString()]?.length),
+    }));
+
+    await cache.set(cacheKey, categoriesWithCount, 300); // cache 5 min
 
     res.json({
       success: true,
