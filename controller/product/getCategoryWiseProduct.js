@@ -7,7 +7,9 @@ const getCategoryWiseProduct = async (req, res) => {
     const category = req.body?.category;
 
     if (!category) {
-      return res.status(400).json({ message: "Category is required", error: true, success: false });
+      return res
+        .status(400)
+        .json({ message: "Category is required", error: true, success: false });
     }
 
     const cacheKey = `products:category:${category.toLowerCase().trim()}`;
@@ -15,27 +17,38 @@ const getCategoryWiseProduct = async (req, res) => {
     // Try cache first
     const cached = await cache.get(cacheKey);
     if (cached) {
-      return res.json({ data: cached, message: `Found ${cached.length} products (cache)`, success: true, error: false, fromCache: true });
+      return res.json({
+        data: cached,
+        message: `Found ${cached.length} products (cache)`,
+        success: true,
+        error: false,
+        fromCache: true,
+      });
     }
 
     // Fetch category + subcategories names in one go
     const categoryDoc = await Category.findOne({
-      name: { $regex: new RegExp(`^${category}$`, "i") }
+      name: { $regex: new RegExp(`^${category}$`, "i") },
     }).lean();
 
     let categoryNames = [category];
 
     if (categoryDoc) {
-      const subcategories = await Category.find({ parentCategory: categoryDoc._id }).lean();
-      categoryNames = [categoryDoc.name, ...subcategories.map(s => s.name)];
+      const subcategories = await Category.find({
+        parentCategory: categoryDoc._id,
+      }).lean();
+      categoryNames = [categoryDoc.name, ...subcategories.map((s) => s.name)];
     }
 
-    // Case-insensitive match against all category names (parent + subcategories)
+    // Category names come from the same collection as products, so use exact
+    // values here and let MongoDB use the category index.
     const products = await productModel
       .find({
-        category: { $in: categoryNames.map(n => new RegExp(`^${n}$`, "i")) }
+        category: { $in: categoryNames },
       })
-      .select("productName brandName category subcategory productImage price selling isTrending rating reviewCount badge isAvailable stock")
+      .select(
+        "productName brandName category subcategory productImage price selling isTrending rating reviewCount badge isAvailable stock",
+      )
       .sort({ isTrending: -1, createdAt: -1 })
       .lean();
 

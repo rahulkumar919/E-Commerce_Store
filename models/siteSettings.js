@@ -39,6 +39,41 @@ const siteSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    showMovingSticker: {
+      type: Boolean,
+      default: true,
+    },
+    movingStickerText: {
+      type: String,
+      default: "🚚 Delivery only available in Sitamarhi. Order fresh fruits directly to your door! 🍓",
+    },
+    // Marquee ticker bar — multiple messages
+    showMarqueeBar: {
+      type: Boolean,
+      default: true,
+    },
+    marqueeBarBgColor: {
+      type: String,
+      default: "#7f1d1d", // dark red
+    },
+    marqueeBarTextColor: {
+      type: String,
+      default: "#ffffff",
+    },
+    marqueeMessages: {
+      type: [
+        {
+          text: { type: String, required: true },
+          emoji: { type: String, default: "🎉" },
+          isActive: { type: Boolean, default: true },
+        },
+      ],
+      default: [
+        { text: "SAVE MORE WITH 10% EXTRA DISCOUNT ON PREPAID", emoji: "🏷️", isActive: true },
+        { text: "GET EXTRA 10% OFF ON PREPAID ORDERS", emoji: "💳", isActive: true },
+        { text: "FLAT 50% OFF STOREWIDE", emoji: "🔥", isActive: true },
+      ],
+    },
     updatedBy: {
       type: String,
       ref: "user",

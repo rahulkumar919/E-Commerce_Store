@@ -13,6 +13,12 @@ const updateSiteSettings = async (req, res) => {
       seoSettings,
       showBlogInNav,
       showLocationInHeader,
+      showMovingSticker,
+      movingStickerText,
+      showMarqueeBar,
+      marqueeBarBgColor,
+      marqueeBarTextColor,
+      marqueeMessages,
     } = req.body;
 
     let settings = await SiteSettings.findOne();
@@ -28,6 +34,15 @@ const updateSiteSettings = async (req, res) => {
     if (siteAddress !== undefined) settings.siteAddress = siteAddress;
     if (showBlogInNav !== undefined) settings.showBlogInNav = showBlogInNav;
     if (showLocationInHeader !== undefined) settings.showLocationInHeader = showLocationInHeader;
+    if (showMovingSticker !== undefined) settings.showMovingSticker = showMovingSticker;
+    if (movingStickerText !== undefined) settings.movingStickerText = movingStickerText;
+    if (showMarqueeBar !== undefined) settings.showMarqueeBar = showMarqueeBar;
+    if (marqueeBarBgColor !== undefined) settings.marqueeBarBgColor = marqueeBarBgColor;
+    if (marqueeBarTextColor !== undefined) settings.marqueeBarTextColor = marqueeBarTextColor;
+    if (marqueeMessages !== undefined) {
+      settings.marqueeMessages = marqueeMessages;
+      settings.markModified("marqueeMessages");
+    }
 
     // Deep merge nested socialLinks
     if (socialLinks && typeof socialLinks === "object") {

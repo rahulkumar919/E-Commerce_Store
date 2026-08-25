@@ -221,31 +221,141 @@ router.post("/create-inquiry", createInquiry)
 router.get("/all-inquiries", authToken, getAllInquiries)
 router.post("/update-inquiry-status", authToken, updateInquiryStatus)
 
-// AI RAG System Routes
-const processKnowledgeController = require("../controller/ai/processKnowledge")
-const chatWithAI = require("../controller/ai/chatWithAI")
-const processKnowledgePineconeController = require("../controller/ai/processKnowledgePinecone")
-const chatWithAIPinecone = require("../controller/ai/chatWithAIPinecone")
-const chatWithAIEnhanced = require("../controller/ai/chatWithAIEnhanced")
-const chatWithRAG = require("../controller/ai/chatWithRAG")
-const processPDF = require("../controller/ai/processPDF")
+// AI RAG System Routes — inline handler using enhancedRAGService (no missing files)
+const productModel = require("../models/productModel");
+const { generateEnhancedRAGResponse } = require("../services/enhancedRAGService");
 
-router.post("/ai/process-knowledge", authToken, processKnowledgeController) // Admin only - process knowledge base (MongoDB)
-router.post("/ai/chat", chatWithAI) // Public - chat with AI assistant (MongoDB)
+router.post("/ai/chat-enhanced", async (req, res) => {
+  try {
+    const { query, sessionId, userId } = req.body;
+    if (!query?.trim()) return res.status(400).json({ success: false, message: "Query is required" });
+    const response = await generateEnhancedRAGResponse(query, productModel);
+    return res.json(response);
+  } catch (err) {
+    return res.json({ success: true, message: "STM Fruit Shop में आपका स्वागत है! 🍎 WhatsApp: +91 9142517255", intent: "fallback", recommendedProducts: [] });
+  }
+});
 
-// Pinecone-powered endpoints (Better performance)
-router.post("/ai/process-knowledge-pinecone", authToken, processKnowledgePineconeController) // Admin only - process to Pinecone
-router.post("/ai/chat-pinecone", chatWithAIPinecone) // Public - chat with Pinecone backend
+// Keep legacy chat endpoint pointing to same service
+router.post("/ai/chat", async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query?.trim()) return res.status(400).json({ success: false, message: "Query is required" });
+    const response = await generateEnhancedRAGResponse(query, productModel);
+    return res.json(response);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// Enhanced RAG endpoint (BEST - Pinecone + MongoDB + Gemini)
-router.post("/ai/chat-enhanced", chatWithAIEnhanced) // Public - Enhanced RAG with best performance
+// ── Voice Assistant Routes ────────────────────────────────────────────────────
+const VoiceSession = require("../models/voiceSessionModel");
+const { processVoiceQuery } = require("../services/voice/voiceAgentService");
 
-// Professional RAG System (PDF-based, Most Powerful)
-router.post("/ai/process-pdf", authToken, processPDF) // Admin only - process PDF to Pinecone
-router.post("/ai/chat-rag", chatWithRAG) // Public - Professional RAG chat
+// POST /api/voice/chat — text in, AI text out (JSON)
+router.post("/voice/chat", async (req, res) => {
+  try {
+    const { text, sessionId, userId } = req.body;
+    if (!text?.trim()) return res.status(400).json({ success: false, message: "text is required" });
 
-// ✅ LangChain RAG System (Best — PDF → Pinecone → Gemini 2.0 Flash)
-const chatWithLangchainRAG = require("../controller/ai/chatWithLangchainRAG")
-router.post("/ai/chat-langchain", chatWithLangchainRAG) // Public - Full LangChain RAG
+    const sid = sessionId || `http_${Date.now()}`;
+    const result = await processVoiceQuery({ text: text.trim(), sessionId: sid, userId });
+
+    // Persist turn
+    await VoiceSession.findOneAndUpdate(
+      { sessionId: sid },
+      {
+        $setOnInsert: { sessionId: sid, userId: userId || null },
+        $push: {
+          turns: {
+            $each: [
+              { role: "user", text: text.trim() },
+              { role: "assistant", text: result.text, toolCalled: result.toolCalled || "" },
+            ],
+          },
+        },
+      },
+      { upsert: true }
+    ).catch(() => {});
+
+    return res.json({
+      success: true,
+      text: result.text,
+      sessionId: sid,
+      toolCalled: result.toolCalled || null,
+      toolResult: result.toolResult || null,
+    });
+  } catch (err) {
+    console.error("voice/chat error:", err.message);
+    return res.json({
+      success: true,
+      text: "माफ करें, अभी AI से connect नहीं हो पाया। WhatsApp करें: +91 9142517255",
+      sessionId: req.body.sessionId || "fallback",
+    });
+  }
+});
+
+// POST /api/voice/feedback
+router.post("/voice/feedback", async (req, res) => {
+  try {
+    const { sessionId, rating, text: feedbackText } = req.body;
+    if (sessionId) {
+      await VoiceSession.findOneAndUpdate({ sessionId }, { feedbackRating: rating, feedbackText: feedbackText || "" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/voice/session/:id
+router.get("/voice/session/:id", authToken, async (req, res) => {
+  try {
+    const session = await VoiceSession.findOne({ sessionId: req.params.id }).lean();
+    if (!session) return res.status(404).json({ success: false, message: "Not found" });
+    return res.json({ success: true, data: session });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── Voice Admin Routes ────────────────────────────────────────────────────────
+router.get("/voice/admin/sessions", authToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 20;
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    const [sessions, total] = await Promise.all([
+      VoiceSession.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      VoiceSession.countDocuments(filter),
+    ]);
+    return res.json({ success: true, data: sessions, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get("/voice/admin/stats", authToken, async (req, res) => {
+  try {
+    const [totalSessions, activeSessions, escalatedSessions] = await Promise.all([
+      VoiceSession.countDocuments(),
+      VoiceSession.countDocuments({ status: "active" }),
+      VoiceSession.countDocuments({ status: "escalated" }),
+    ]);
+    return res.json({ success: true, data: { totalSessions, activeSessions, escalatedSessions } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete("/voice/admin/sessions/:id", authToken, async (req, res) => {
+  try {
+    await VoiceSession.findByIdAndDelete(req.params.id);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 module.exports = router;

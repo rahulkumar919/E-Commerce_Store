@@ -5,10 +5,25 @@
  */
 const { Redis } = require("@upstash/redis");
 
+const REDIS_TIMEOUT_MS = 1500;
+
+const withTimeout = (operation) =>
+  Promise.race([
+    operation,
+    new Promise((_, reject) => {
+      setTimeout(
+        () => reject(new Error("Redis request timed out")),
+        REDIS_TIMEOUT_MS,
+      );
+    }),
+  ]);
+
 let upstash = null;
 let upstashReady = false;
+let redisDisabledUntil = 0;
 
 const getClient = () => {
+  if (Date.now() < redisDisabledUntil) return null;
   if (upstashReady) return upstash; // null means disabled
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -35,12 +50,9 @@ const getClient = () => {
 // ─── Known cache key groups for pattern-based invalidation ───────────────────
 // Instead of SCAN (slow on free tier), we track all known keys per group
 const KEY_GROUPS = {
-  "categories:*": [
-    "categories:all:plain",
-    "categories:all:with_sub",
-  ],
+  "categories:*": ["categories:all:plain", "categories:all:with_sub"],
   "products:category:*": [], // populated at runtime
-  "search:*": [],            // populated at runtime
+  "search:*": [], // populated at runtime
 };
 
 const runtimeKeys = new Map(); // pattern → Set of keys
@@ -49,7 +61,8 @@ const registerKey = (key) => {
   for (const [pattern, staticKeys] of Object.entries(KEY_GROUPS)) {
     const prefix = pattern.replace("*", "");
     if (key.startsWith(prefix)) {
-      if (!runtimeKeys.has(prefix)) runtimeKeys.set(prefix, new Set(staticKeys));
+      if (!runtimeKeys.has(prefix))
+        runtimeKeys.set(prefix, new Set(staticKeys));
       runtimeKeys.get(prefix).add(key);
     }
   }
@@ -71,22 +84,33 @@ const MEM_MAX = 300;
 
 const memGet = (key) => {
   const exp = memTTL.get(key);
-  if (exp && Date.now() > exp) { memStore.delete(key); memTTL.delete(key); return null; }
+  if (exp && Date.now() > exp) {
+    memStore.delete(key);
+    memTTL.delete(key);
+    return null;
+  }
   return memStore.has(key) ? memStore.get(key) : null;
 };
 const memSet = (key, value, ttlSeconds) => {
   if (memStore.size >= MEM_MAX) {
     const firstKey = memStore.keys().next().value;
-    memStore.delete(firstKey); memTTL.delete(firstKey);
+    memStore.delete(firstKey);
+    memTTL.delete(firstKey);
   }
   memStore.set(key, value);
   memTTL.set(key, Date.now() + ttlSeconds * 1000);
 };
-const memDel = (key) => { memStore.delete(key); memTTL.delete(key); };
+const memDel = (key) => {
+  memStore.delete(key);
+  memTTL.delete(key);
+};
 const memDelPattern = (pattern) => {
   const prefix = pattern.replace("*", "");
   for (const key of memStore.keys()) {
-    if (key.startsWith(prefix)) { memStore.delete(key); memTTL.delete(key); }
+    if (key.startsWith(prefix)) {
+      memStore.delete(key);
+      memTTL.delete(key);
+    }
   }
 };
 
@@ -96,9 +120,10 @@ const cache = {
     const client = getClient();
     if (client) {
       try {
-        return (await client.get(key)) ?? null;
+        return (await withTimeout(client.get(key))) ?? null;
       } catch (err) {
         console.warn("Cache get error:", err.message);
+        redisDisabledUntil = Date.now() + 60000;
       }
     }
     return memGet(key);
@@ -109,10 +134,11 @@ const cache = {
     const client = getClient();
     if (client) {
       try {
-        await client.set(key, value, { ex: ttlSeconds });
+        await withTimeout(client.set(key, value, { ex: ttlSeconds }));
         return;
       } catch (err) {
         console.warn("Cache set error:", err.message);
+        redisDisabledUntil = Date.now() + 60000;
       }
     }
     memSet(key, value, ttlSeconds);
@@ -121,7 +147,12 @@ const cache = {
   async del(key) {
     const client = getClient();
     if (client) {
-      try { await client.del(key); return; } catch (err) { console.warn("Cache del error:", err.message); }
+      try {
+        await client.del(key);
+        return;
+      } catch (err) {
+        console.warn("Cache del error:", err.message);
+      }
     }
     memDel(key);
   },

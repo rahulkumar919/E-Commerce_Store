@@ -100,8 +100,10 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
+
+productSchema.index({ category: 1, isTrending: -1, createdAt: -1 });
 
 const productModel = mongoose.model("product", productSchema);
 

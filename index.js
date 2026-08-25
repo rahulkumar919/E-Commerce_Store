@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const http = require("http");
 require("dotenv").config();
 const router = require("./routes");
 const connectDB = require("./config/db");
@@ -63,7 +64,18 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 8080;
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  const httpServer = http.createServer(app);
+
+  // Try to attach WebSocket if the service exists (optional)
+  try {
+    const { attachVoiceWebSocket } = require("./services/voice/voiceWebSocket");
+    attachVoiceWebSocket(httpServer);
+    console.log(`🎙️  Voice WebSocket: ws://localhost:${PORT}/ws/voice`);
+  } catch {
+    console.log("ℹ️  Voice WebSocket not available (services/voice folder missing)");
+  }
+
+  httpServer.listen(PORT, () => {
     console.log("✅ Connected To DB");
     console.log(`🚀 Server running on port ${PORT}`);
   });
