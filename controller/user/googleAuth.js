@@ -1,5 +1,6 @@
 const userModel = require("../../models/userModel");
 const jwt = require("jsonwebtoken");
+const authCookieOptions = require("../../helpers/authCookieOptions");
 
 async function googleAuthController(req, res) {
   try {
@@ -18,12 +19,13 @@ async function googleAuthController(req, res) {
       cleanName = "Rahul Kumar";
     } else {
       // Remove trailing long numbers commonly found in default Google names matching email prefix
-      cleanName = name.replace(/[0-9]{3,}/g, '').trim();
+      cleanName = name.replace(/[0-9]{3,}/g, "").trim();
       if (!cleanName) cleanName = name; // fallback
       // Capitalize first letter
       cleanName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
     }
-    const isAdminEmail = email.toLowerCase() === "rahulkumar9508548671@gmail.com";
+    const isAdminEmail =
+      email.toLowerCase() === "rahulkumar9508548671@gmail.com";
 
     // Check if user already exists
     let user = await userModel.findOne({ email });
@@ -56,11 +58,7 @@ async function googleAuthController(req, res) {
         expiresIn: "8h",
       });
 
-      const tokenOption = {
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-      };
+      const tokenOption = authCookieOptions();
 
       res.cookie("token", token, tokenOption).json({
         message: "Login successful",
@@ -90,11 +88,7 @@ async function googleAuthController(req, res) {
         expiresIn: "8h",
       });
 
-      const tokenOption = {
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-      };
+      const tokenOption = authCookieOptions();
 
       res.cookie("token", token, tokenOption).json({
         message: "Account created and logged in successfully",

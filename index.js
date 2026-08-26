@@ -5,6 +5,7 @@ const http = require("http");
 require("dotenv").config();
 const router = require("./routes");
 const connectDB = require("./config/db");
+const { warmup } = require("../my-app/backend/ai-agent/src/llm/llama");
 
 const app = express();
 
@@ -35,10 +36,15 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
     exposedHeaders: ["Set-Cookie"],
     maxAge: 86400,
-  })
+  }),
 );
 
 app.use(express.json());
@@ -47,7 +53,9 @@ app.use(cookieParser());
 // ✅ Keep-alive ping endpoint — responds instantly, wakes up the serverless function
 // Call this from frontend on app load to avoid cold start delay for real API calls
 app.get("/api/ping", (req, res) => {
-  res.status(200).json({ success: true, message: "pong", timestamp: Date.now() });
+  res
+    .status(200)
+    .json({ success: true, message: "pong", timestamp: Date.now() });
 });
 
 app.use("/api", router);
@@ -56,7 +64,9 @@ app.use("/api", router);
 app.use((err, req, res, next) => {
   console.error("Global Error:", err.message);
   if (err.message === "Not allowed by CORS") {
-    return res.status(403).json({ success: false, message: "CORS error: origin not allowed" });
+    return res
+      .status(403)
+      .json({ success: false, message: "CORS error: origin not allowed" });
   }
   res.status(500).json({ success: false, message: "Internal Server Error" });
 });
@@ -66,17 +76,13 @@ const PORT = process.env.PORT || 8080;
 connectDB().then(() => {
   const httpServer = http.createServer(app);
 
-  // Try to attach WebSocket if the service exists (optional)
-  try {
-    const { attachVoiceWebSocket } = require("./services/voice/voiceWebSocket");
-    attachVoiceWebSocket(httpServer);
-    console.log(`🎙️  Voice WebSocket: ws://localhost:${PORT}/ws/voice`);
-  } catch {
-    console.log("ℹ️  Voice WebSocket not available (services/voice folder missing)");
-  }
-
   httpServer.listen(PORT, () => {
     console.log("✅ Connected To DB");
     console.log(`🚀 Server running on port ${PORT}`);
+    warmup()
+      .then(() => console.log("✅ Ollama model warmed up"))
+      .catch((error) =>
+        console.warn("⚠️ Ollama warmup skipped:", error.message),
+      );
   });
 });

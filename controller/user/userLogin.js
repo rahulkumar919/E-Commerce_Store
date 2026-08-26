@@ -1,6 +1,7 @@
-const userModel = require("../../models/userModel")
+const userModel = require("../../models/userModel");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const authCookieOptions = require("../../helpers/authCookieOptions");
 
 async function usersigninController(req, res) {
   try {
@@ -24,18 +25,13 @@ async function usersigninController(req, res) {
       const tokenData = {
         _id: user._id,
         email: user.email,
-
       };
 
       const token = await jwt.sign(tokenData, process.env.TOKEN_SECRET_KEY, {
         expiresIn: 60 * 60 * 8,
       });
 
-      const tokenOption = {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none'
-      };
+      const tokenOption = authCookieOptions();
       res.cookie("token", token, tokenOption).status(201).json({
         message: "Login SuccessFully",
         data: token,

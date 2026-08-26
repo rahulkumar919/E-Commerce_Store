@@ -1,13 +1,9 @@
-const userModel = require("../../models/userModel")
+const userModel = require("../../models/userModel");
+const authCookieOptions = require("../../helpers/authCookieOptions");
 
 const useLogout = async (req, res) => {
   try {
-    
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: true, 
-      sameSite: "none", 
-    });
+    res.clearCookie("token", authCookieOptions());
 
     return res.json({
       message: "Logged out successfully!",

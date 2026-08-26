@@ -3,6 +3,7 @@ require("dotenv").config();
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const authCookieOptions = require("../../helpers/authCookieOptions");
 const userModel = require("../../models/userModel");
 
 // ---------- CONFIG ----------
@@ -41,7 +42,9 @@ async function sendOtpController(req, res) {
 
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: "Email and password are required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required" });
     }
 
     const existing = await userModel.findOne({ email });
@@ -51,7 +54,9 @@ async function sendOtpController(req, res) {
       // User exists -> verify password
       const isMatch = await bcrypt.compare(password, existing.password);
       if (!isMatch) {
-        return res.status(400).json({ success: false, message: "Incorrect password." });
+        return res
+          .status(400)
+          .json({ success: false, message: "Incorrect password." });
       }
       pendingData = { isNew: false, user: existing };
     } else {
@@ -60,7 +65,12 @@ async function sendOtpController(req, res) {
       const hashPassword = bcrypt.hashSync(password, salt);
       // Derive a name from email if not provided
       const name = email.split("@")[0];
-      pendingData = { isNew: true, name, passwordHash: hashPassword, role: "GENERAL" };
+      pendingData = {
+        isNew: true,
+        name,
+        passwordHash: hashPassword,
+        role: "GENERAL",
+      };
     }
 
     // generate OTP
@@ -81,19 +91,32 @@ async function sendOtpController(req, res) {
         to: email,
         subject: "Your RK Shop Login OTP",
         text: `Hello,\n\nYour OTP for login is: ${otp}\nIt will expire in ${Math.round(
-          OTP_TTL / 60000
+          OTP_TTL / 60000,
         )} minutes.\n\nThank you,\nRK Shop Team`,
       });
     } catch (mailErr) {
       console.error("❌ Email send failed:", mailErr);
-      return res.status(500).json({ success: false, message: "Failed to send OTP. Check SMTP credentials." });
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message: "Failed to send OTP. Check SMTP credentials.",
+        });
     }
 
     console.log("✅ OTP sent successfully to:", email, "OTP:", otp);
-    return res.json({ success: true, message: "OTP sent to your email. Please verify." });
+    return res.json({
+      success: true,
+      message: "OTP sent to your email. Please verify.",
+    });
   } catch (err) {
     console.error("🔥 sendOtpController error:", err.stack || err);
-    return res.status(500).json({ success: false, message: err.message || "Server error while sending OTP" });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: err.message || "Server error while sending OTP",
+      });
   }
 }
 
@@ -101,13 +124,21 @@ async function sendOtpController(req, res) {
 async function verifyOtpController(req, res) {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ success: false, message: "Email and OTP are required" });
+    if (!email || !otp)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and OTP are required" });
 
     const record = otpStore.get(email);
     const pending = pendingUsers.get(email);
 
     if (!record || !pending) {
-      return res.status(400).json({ success: false, message: "OTP expired or login not initiated. Please try again." });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "OTP expired or login not initiated. Please try again.",
+        });
     }
 
     if (record.otp !== otp) {
@@ -145,21 +176,24 @@ async function verifyOtpController(req, res) {
       expiresIn: 60 * 60 * 8, // 8 hours
     });
 
-    const tokenOption = {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none'
-    };
+    const tokenOption = authCookieOptions();
 
-    return res.cookie("token", token, tokenOption).status(201).json({
-      message: pending.isNew ? "Account created and logged in!" : "Login Successfully via OTP",
-      data: token,
-      success: true,
-      error: false,
-    });
+    return res
+      .cookie("token", token, tokenOption)
+      .status(201)
+      .json({
+        message: pending.isNew
+          ? "Account created and logged in!"
+          : "Login Successfully via OTP",
+        data: token,
+        success: true,
+        error: false,
+      });
   } catch (err) {
     console.error("🔥 verifyOtpController error:", err.stack || err);
-    return res.status(500).json({ success: false, message: "Server error while verifying OTP" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error while verifying OTP" });
   }
 }
 
@@ -167,18 +201,31 @@ async function verifyOtpController(req, res) {
 async function resendOtpController(req, res) {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: "Email required" });
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email required" });
 
     const record = otpStore.get(email);
     const pending = pendingUsers.get(email);
 
     if (!pending) {
-      return res.status(400).json({ success: false, message: "No pending login found. Please enter email and password again." });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "No pending login found. Please enter email and password again.",
+        });
     }
 
     if (!record) {
       const newOtp = generateOtp();
-      otpStore.set(email, { otp: newOtp, createdAt: Date.now(), resendCount: 1 });
+      otpStore.set(email, {
+        otp: newOtp,
+        createdAt: Date.now(),
+        resendCount: 1,
+      });
       setTimeout(() => {
         otpStore.delete(email);
         pendingUsers.delete(email);
@@ -195,7 +242,12 @@ async function resendOtpController(req, res) {
     }
 
     if (record.resendCount >= RESEND_LIMIT) {
-      return res.status(429).json({ success: false, message: "Resend limit reached. Please start login again." });
+      return res
+        .status(429)
+        .json({
+          success: false,
+          message: "Resend limit reached. Please start login again.",
+        });
     }
 
     const newOtp = generateOtp();
@@ -215,7 +267,9 @@ async function resendOtpController(req, res) {
     return res.json({ success: true, message: "OTP resent successfully." });
   } catch (err) {
     console.error("🔥 resendOtpController error:", err.stack || err);
-    return res.status(500).json({ success: false, message: "Server error while resending OTP" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error while resending OTP" });
   }
 }
 
