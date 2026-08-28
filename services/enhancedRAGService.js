@@ -1,5 +1,5 @@
-const { runAgent } = require("../../my-app/backend/ai-agent/src/agent/agent");
-const { ingestFile } = require("../../my-app/backend/ai-agent/src/rag/ingest");
+const { runAgent } = require("../ai-agent/src/agent/agent");
+const { ingestFile } = require("../ai-agent/src/rag/ingest");
 const path = require("path");
 const {
   createStructuredAssistantOutput,

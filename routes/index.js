@@ -229,27 +229,95 @@ router.post("/create-inquiry", createInquiry);
 router.get("/all-inquiries", authToken, getAllInquiries);
 router.post("/update-inquiry-status", authToken, updateInquiryStatus);
 
-// AI RAG System Routes — inline handler using enhancedRAGService (no missing files)
+// =========================== AI & AGENT ROUTES ===========================
 const productModel = require("../models/productModel");
 const cartModel = require("../models/cartProduct");
 const {
   generateEnhancedRAGResponse,
+  processKnowledgeBaseToPinecone,
 } = require("../services/enhancedRAGService");
+const {
+  generateRAGResponsePinecone,
+} = require("../services/ragServicePinecone");
+const professionalRAG = require("../services/professionalRAGService");
+const { ragChat } = require("../services/langchainRAGService");
+const { processKnowledgeBase } = require("../services/ragService");
+const aiAgentRouter = require("../ai-agent/src/server");
 
+// Mount standalone AI Agent router at /ai-agent
+router.use("/ai-agent", aiAgentRouter);
+
+// Enhanced AI Chat (Pinecone + MongoDB + Gemini / Agent fallback)
 router.post("/ai/chat-enhanced", optionalAuthToken, async (req, res) => {
   try {
-    const { query, sessionId } = req.body;
-    if (!query?.trim())
+    const { query, sessionId, userId } = req.body;
+    if (!query?.trim()) {
       return res
         .status(400)
         .json({ success: false, message: "Query is required" });
+    }
     const response = await generateEnhancedRAGResponse(query, productModel, {
       sessionId,
-      userId: req.user?._id || req.userId,
+      userId: userId || req.user?._id || req.userId,
       CartModel: cartModel,
     });
     return res.json(response);
   } catch (err) {
+    console.error("AI chat-enhanced error:", err);
+    return res.json({
+      success: true,
+      message:
+        "STM Fruit Shop में आपका स्वागत है! 🍎 ताजे फल, ड्राई फ्रूट्स और केक के लिए WhatsApp करें: +91 9142517255",
+      intent: "fallback",
+      recommendedProducts: [],
+    });
+  }
+});
+
+// Standard AI Chat endpoint
+router.post("/ai/chat", optionalAuthToken, async (req, res) => {
+  try {
+    const { query, sessionId, userId } = req.body;
+    if (!query?.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Query is required" });
+    }
+    const response = await generateEnhancedRAGResponse(query, productModel, {
+      sessionId,
+      userId: userId || req.user?._id || req.userId,
+      CartModel: cartModel,
+    });
+    return res.json(response);
+  } catch (err) {
+    console.error("AI chat error:", err);
+    return res.json({
+      success: true,
+      message:
+        "STM Fruit Shop में आपका स्वागत है! 🍎 ताजे फल और ड्राई फ्रूट्स के लिए WhatsApp करें: +91 9142517255",
+      intent: "fallback",
+      recommendedProducts: [],
+    });
+  }
+});
+
+// Pinecone RAG Chat
+router.post("/ai/chat-pinecone", optionalAuthToken, async (req, res) => {
+  try {
+    const { query, userId } = req.body;
+    if (!query?.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Query is required" });
+    }
+    const response = await generateRAGResponsePinecone(
+      query,
+      userId || req.user?._id || req.userId || "guest",
+      productModel,
+    );
+    return res.json(response);
+  } catch (err) {
+    console.error("AI chat-pinecone error:", err);
     return res.json({
       success: true,
       message: "STM Fruit Shop में आपका स्वागत है! 🍎 WhatsApp: +91 9142517255",
@@ -259,20 +327,80 @@ router.post("/ai/chat-enhanced", optionalAuthToken, async (req, res) => {
   }
 });
 
-// Keep legacy chat endpoint pointing to same service
-router.post("/ai/chat", optionalAuthToken, async (req, res) => {
+// Professional PDF RAG Chat
+router.post("/ai/chat-rag", optionalAuthToken, async (req, res) => {
   try {
-    const { query, sessionId } = req.body;
-    if (!query?.trim())
+    const { query } = req.body;
+    if (!query?.trim()) {
       return res
         .status(400)
         .json({ success: false, message: "Query is required" });
-    const response = await generateEnhancedRAGResponse(query, productModel, {
-      sessionId,
-      userId: req.user?._id || req.userId,
-      CartModel: cartModel,
+    }
+    const response = await professionalRAG.generateRAGResponse(
+      query,
+      productModel,
+    );
+    return res.json(response);
+  } catch (err) {
+    console.error("AI chat-rag error:", err);
+    return res.json({
+      success: true,
+      message: "STM Fruit Shop में आपका स्वागत है! 🍎 WhatsApp: +91 9142517255",
+      intent: "fallback",
+      recommendedProducts: [],
+    });
+  }
+});
+
+// LangChain RAG Chat
+router.post("/ai/chat-langchain", optionalAuthToken, async (req, res) => {
+  try {
+    const { query, sessionId } = req.body;
+    if (!query?.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Query is required" });
+    }
+    const response = await ragChat({
+      query,
+      sessionId: sessionId || "default",
+      ProductModel: productModel,
     });
     return res.json(response);
+  } catch (err) {
+    console.error("AI chat-langchain error:", err);
+    return res.json({
+      success: true,
+      message: "STM Fruit Shop में आपका स्वागत है! 🍎 WhatsApp: +91 9142517255",
+      intent: "fallback",
+      recommendedProducts: [],
+    });
+  }
+});
+
+// Knowledge Base Processing Endpoints (Admin protected)
+router.post("/ai/process-knowledge", authToken, async (req, res) => {
+  try {
+    const result = await processKnowledgeBase(req.body.filePath);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/ai/process-knowledge-pinecone", authToken, async (req, res) => {
+  try {
+    const result = await processKnowledgeBaseToPinecone(req.body.filePath);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/ai/process-pdf", authToken, async (req, res) => {
+  try {
+    const result = await professionalRAG.processPDFToPinecone(req.body.filePath);
+    return res.json(result);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
