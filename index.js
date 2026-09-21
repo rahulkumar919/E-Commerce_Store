@@ -30,13 +30,24 @@ const allowedOrigins = [
   "http://localhost:3000",
 ];
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) return true;
+  // Allow all Vercel deployment URLs of the frontend
+  if (/^https:\/\/e-commerce-fronted.*\.vercel\.app$/.test(origin)) return true;
+  // Allow any localhost port
+  if (/^http:\/\/localhost:\d+$/.test(origin)) return true;
+  return false;
+};
+
 // Single, clean CORS setup
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (server-to-server, mobile apps, curl)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
