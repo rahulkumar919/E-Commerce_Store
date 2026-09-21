@@ -43,7 +43,7 @@ const getAllCategories = async (req, res) => {
       const productCounts = await Product.aggregate([
         {
           $match: {
-            category: { $exists: true, $ne: null, $ne: "" },
+            category: { $exists: true, $nin: [null, ""] },
           },
         },
         {

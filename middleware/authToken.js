@@ -5,7 +5,7 @@ async function authToken(req, res, next) {
   try {
     let token;
 
-    // Get token from cookie or header
+    // Accept token from cookie (preferred) or Authorization header
     try {
       token =
         req.cookies?.token ||
@@ -15,9 +15,7 @@ async function authToken(req, res, next) {
       token = null;
     }
 
-    // If no token found
     if (!token) {
-      console.log("No token found in request");
       return res.status(401).json({
         message: "Please login to continue",
         error: true,
@@ -25,15 +23,19 @@ async function authToken(req, res, next) {
       });
     }
 
-    //  Verify token
-    const secret =
-      process.env.JWT_SECRET ||
-      process.env.TOKEN_SECRET_KEY ||
-      "yourSecretKey";
+    // Fail loudly if the env var is missing — never fall back to a known string
+    const secret = process.env.TOKEN_SECRET_KEY || process.env.JWT_SECRET;
+    if (!secret) {
+      console.error("FATAL: TOKEN_SECRET_KEY is not set in environment");
+      return res.status(500).json({
+        message: "Server configuration error",
+        error: true,
+        success: false,
+      });
+    }
 
     jwt.verify(token, secret, async (err, decoded) => {
       if (err) {
-        console.log("Invalid token:", err.message);
         return res.status(401).json({
           message: "Invalid or expired token",
           error: true,
@@ -41,39 +43,39 @@ async function authToken(req, res, next) {
         });
       }
 
-      console.log(" Decoded token:", decoded);
+      try {
+        const userId = decoded?._id || decoded?.id || decoded?.userId || null;
 
-      const userId = decoded?.id || decoded?._id || decoded?.userId || null;
+        if (!userId) {
+          return res.status(401).json({
+            message: "Invalid token payload",
+            error: true,
+            success: false,
+          });
+        }
 
-      if (!userId) {
-        console.log(" userId missing in decoded token");
+        const user = await userModel.findById(userId);
+        if (!user) {
+          return res.status(401).json({
+            message: "User not found or deleted",
+            error: true,
+            success: false,
+          });
+        }
+
+        req.userId = user._id.toString();
+        req.user = user;
+        next();
+      } catch (innerErr) {
         return res.status(401).json({
-          message: "Invalid token payload",
+          message: "Invalid or unauthorized token",
           error: true,
           success: false,
         });
       }
-
-      //  Find user in DB
-      const user = await userModel.findById(userId);
-      if (!user) {
-        console.log(" User not found in DB for:", userId);
-        return res.status(401).json({
-          message: "User not found or deleted",
-          error: true,
-          success: false,
-        });
-      }
-
-      //  Attach to request
-      req.userId = user._id.toString();
-      req.user = user;
-      console.log("Authenticated User:", user.email, "| Role:", user.role);
-
-      next();
     });
   } catch (err) {
-    console.error(" Auth Middleware Error:", err.message);
+    console.error("Auth middleware error:", err.message);
     res.status(500).json({
       message: err.message || "Internal Server Error",
       error: true,

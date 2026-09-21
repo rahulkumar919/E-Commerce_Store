@@ -1,46 +1,40 @@
-const { Pinecone } = require("@pinecone-database/pinecone");
-const { embedDocuments, embedQuery } = require("./embeddings");
+/**
+ * vectorStore.js — Pinecone wrapper
+ * ───────────────────────────────────
+ * Single place that knows about Pinecone. Everything else calls getVectorStore().
+ *
+ * Uses @langchain/pinecone which wraps @pinecone-database/pinecone.
+ * The index must already exist in Pinecone before calling this.
+ */
 
-let index;
+"use strict";
 
-function getIndex() {
-  if (!index) {
-    if (!process.env.PINECONE_API_KEY || !process.env.PINECONE_INDEX_NAME) {
-      throw new Error("PINECONE_API_KEY and PINECONE_INDEX_NAME are required");
-    }
-    const client = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-    index = client.index(process.env.PINECONE_INDEX_NAME);
-  }
-  return index;
+const { PineconeStore }  = require("@langchain/pinecone");
+const { Pinecone }       = require("@pinecone-database/pinecone");
+const { getEmbeddings }  = require("./embeddings");
+
+let cachedVectorStore = null;
+
+async function getVectorStore() {
+  if (cachedVectorStore) return cachedVectorStore;
+
+  if (!process.env.PINECONE_API_KEY)       throw new Error("PINECONE_API_KEY not set");
+  if (!process.env.PINECONE_INDEX_NAME)    throw new Error("PINECONE_INDEX_NAME not set");
+
+  const pinecone     = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+  const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+
+  cachedVectorStore = await PineconeStore.fromExistingIndex(
+    getEmbeddings(),
+    { pineconeIndex }
+  );
+
+  return cachedVectorStore;
 }
 
-async function upsertDocuments(documents) {
-  const batchSize = 32;
-  let uploaded = 0;
-  for (let start = 0; start < documents.length; start += batchSize) {
-    const batch = documents.slice(start, start + batchSize);
-    const vectors = await embedDocuments(
-      batch.map((document) => document.text),
-    );
-    const records = batch.map((document, position) => ({
-      id: document.id || `knowledge-${Date.now()}-${start + position}`,
-      values: vectors[position],
-      metadata: { text: document.text, ...(document.metadata || {}) },
-    }));
-    await getIndex().upsert({ records });
-    uploaded += records.length;
-  }
-  return uploaded;
+/** Reset cache (used in tests) */
+function resetVectorStore() {
+  cachedVectorStore = null;
 }
 
-async function searchVectors(query, topK = 5) {
-  const vector = await embedQuery(query);
-  const result = await getIndex().query({
-    vector,
-    topK,
-    includeMetadata: true,
-  });
-  return result.matches || [];
-}
-
-module.exports = { upsertDocuments, searchVectors };
+module.exports = { getVectorStore, resetVectorStore };

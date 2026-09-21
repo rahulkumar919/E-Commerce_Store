@@ -1,34 +1,15 @@
 // controller/user/otpController.js
 require("dotenv").config();
-const nodemailer = require("nodemailer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const authCookieOptions = require("../../helpers/authCookieOptions");
 const userModel = require("../../models/userModel");
+const { transporter } = require("../../config/email");
 
-// ---------- CONFIG ----------
-const OTP_TTL = parseInt(process.env.OTP_TTL_MINUTES || "5", 10) * 60 * 1000; // 5 mins
+// ---------- CONFIG ----------const OTP_TTL = parseInt(process.env.OTP_TTL_MINUTES || "5", 10) * 60 * 1000; // 5 mins
 const RESEND_LIMIT = parseInt(process.env.OTP_RESEND_LIMIT || "3", 10);
 const otpStore = new Map();
 const pendingUsers = new Map();
-
-// ---------- MAIL TRANSPORTER ----------
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// ✅ Verify SMTP connection at startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("SMTP connection failed:", error.message);
-  } else {
-    console.log("✅ SMTP ready:", success);
-  }
-});
 
 // ---------- GENERATE OTP ----------
 function generateOtp() {

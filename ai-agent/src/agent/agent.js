@@ -1,262 +1,284 @@
-const { chat } = require("../llm/llama");
-const { SYSTEM_PROMPT } = require("./systemPrompt");
-const { searchProducts } = require("../tools/searchProducts");
-const { searchKnowledge } = require("../tools/searchKnowledge");
-const { getProduct } = require("../tools/getProduct");
-const { getCart } = require("../tools/getCart");
-const { addToCart } = require("../tools/addToCart");
-const { removeFromCart } = require("../tools/removeFromCart");
+/**
+ * agent.js — Full Agentic ReAct loop (Phase 6 — all tools + RAG active)
+ * ─────────────────────────────────────────────────────────────────────
+ * ARCHITECTURE:
+ *   ai.controller.js → runAgent() → LLM.bindTools([...]) → tool calls → services → MongoDB
+ *
+ * HOW THE ReAct LOOP WORKS:
+ *   1. Build messages: [SystemMessage, ...history, HumanMessage(userInput)]
+ *   2. Invoke LLM with tools bound → model may return tool_call messages
+ *   3. If tool calls present: execute them → append results → invoke LLM again
+ *   4. Repeat until LLM returns a plain text response (no more tool calls)
+ *   5. Hard stop at agentConfig.maxIterations to prevent infinite loops
+ *
+ * WHAT THIS FILE DOES NOT DO:
+ *   - Never constructs a specific LLM (getLLM() handles that)
+ *   - Never touches req/res (ai.controller.js handles that)
+ *   - Never accesses userId from user messages (ctx.userId is the only source)
+ *
+ * STRUCTURED RESPONSE:
+ *   Returns: { message, products[], cart, order, citations[], toolsUsed[], usedRag }
+ *   The controller uses this to build the JSON response the frontend expects.
+ *
+ * TOOL RESULT PARSING:
+ *   Each tool returns JSON.stringify(result). We parse the relevant fields out
+ *   here to build the structured response (products, cart, etc.).
+ */
 
-const toolDefinitions = [
-  {
-    type: "function",
-    function: {
-      name: "searchProducts",
-      description: "Find available shop products relevant to a request.",
-      parameters: {
-        type: "object",
-        properties: { query: { type: "string" } },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "searchKnowledge",
-      description:
-        "Search the STM shop PDF knowledge base and return the 10 most relevant factual passages.",
-      parameters: {
-        type: "object",
-        properties: { query: { type: "string" } },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "getProduct",
-      description: "Get details for one product by id.",
-      parameters: {
-        type: "object",
-        properties: { productId: { type: "string" } },
-        required: ["productId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "getCart",
-      description: "View the signed-in user's cart.",
-      parameters: {
-        type: "object",
-        properties: {},
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "addToCart",
-      description: "Add one product to the signed-in user's cart.",
-      parameters: {
-        type: "object",
-        properties: { productId: { type: "string" } },
-        required: ["productId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "removeFromCart",
-      description:
-        "Immediately remove the named product from the signed-in user's cart when the user explicitly says remove or delete it. Do not ask for confirmation or call getCart first.",
-      parameters: {
-        type: "object",
-        properties: {
-          productId: {
-            type: "string",
-            description: "MongoDB product ID when known",
-          },
-          productName: {
-            type: "string",
-            description: "Product name such as Khajoor or Dates",
-          },
-          query: {
-            type: "string",
-            description: "Product search text when the exact name is unknown",
-          },
-        },
-        anyOf: [
-          { required: ["productId"] },
-          { required: ["productName"] },
-          { required: ["query"] },
-        ],
-      },
-    },
-  },
-];
+"use strict";
 
-const handlers = {
-  searchProducts,
-  searchKnowledge,
-  getProduct,
-  getCart,
-  addToCart,
-  removeFromCart,
-};
+const { HumanMessage, SystemMessage, AIMessage: LCAIMessage, ToolMessage } = require("@langchain/core/messages");
+const { getLLM }               = require("../llm");
+const { SYSTEM_PROMPT }        = require("./agentPrompt");
+const agentConfig              = require("./agentConfig");
+const aiLogger                 = require("../utils/aiLogger");
+const { sanitizeString }       = require("../utils/sanitize");
 
-function requestedCartRemoval(query) {
-  const match = query.match(
-    /(?:remove|delete|take out|hatao|nikal)\s+(.+?)\s+(?:from|in)\s+(?:my\s+)?(?:cart|basket)/i,
-  );
-  if (!match) return null;
-  return match[1].replace(/[?.!,]+$/, "").trim();
+// ── Tool factories — each takes ctx so tools always have the authenticated userId ─
+const { createSearchProductsTool }    = require("../tools/searchProducts.tool");
+const { createGetProductTool }        = require("../tools/getProduct.tool");
+const { createGetCartTool }           = require("../tools/getCart.tool");
+const { createAddToCartTool }         = require("../tools/addToCart.tool");
+const { createRemoveFromCartTool }    = require("../tools/removeFromCart.tool");
+const { createUpdateCartQuantityTool }= require("../tools/updateCartQuantity.tool");
+const { createGetOrderStatusTool }    = require("../tools/getOrderStatus.tool");
+const { createSearchKnowledgeTool }   = require("../tools/searchKnowledge.tool");
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * buildMessages — Construct the LangChain message array for this turn.
+ * @param {string}   userMessage
+ * @param {object[]} history   [{ role:"user"|"assistant", content }]
+ */
+function buildMessages(userMessage, history) {
+  const msgs = [new SystemMessage(SYSTEM_PROMPT)];
+
+  for (const turn of history) {
+    msgs.push(
+      turn.role === "user"
+        ? new HumanMessage(turn.content)
+        : new LCAIMessage(turn.content)
+    );
+  }
+
+  msgs.push(new HumanMessage(sanitizeString(userMessage)));
+  return msgs;
 }
 
-async function runAgent({
-  query,
-  sessionId = "default",
-  userId,
-  ProductModel,
-  CartModel,
-}) {
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: query },
+/**
+ * buildTools — Instantiate all tools with the per-request context.
+ * ctx.userId is injected here so every tool has it without asking the LLM.
+ */
+function buildTools(ctx) {
+  return [
+    createSearchProductsTool(ctx),
+    createGetProductTool(ctx),
+    createGetCartTool(ctx),
+    createAddToCartTool(ctx),
+    createRemoveFromCartTool(ctx),
+    createUpdateCartQuantityTool(ctx),
+    createGetOrderStatusTool(ctx),
+    createSearchKnowledgeTool(ctx),
   ];
-  const products = [];
-  const maxToolRounds = 3;
-  const removalRequest = requestedCartRemoval(query);
-  let removalHandled = false;
-  let removalResult = null;
+}
 
-  try {
-    for (let round = 0; round <= maxToolRounds; round += 1) {
-      let assistant;
-      try {
-        assistant = await chat(messages, { tools: toolDefinitions });
-      } catch (err) {
-        console.warn("LLM chat error (falling back to direct store logic):", err.message);
-        break;
+/**
+ * parseToolResult — Safely parse a tool's JSON string output.
+ */
+function parseToolResult(content) {
+  if (typeof content !== "string") return {};
+  try { return JSON.parse(content); } catch { return {}; }
+}
+
+/**
+ * extractStructuredData — Walk tool results to build the structured response fields.
+ * This means the controller gets real product/cart objects, not embedded JSON strings.
+ */
+function extractStructuredData(toolCallLog) {
+  let products   = [];
+  let cart       = null;
+  let order      = null;
+  let citations  = [];
+  let usedRag    = false;
+  const toolsUsed = [...new Set(toolCallLog.map((t) => t.name))];
+
+  for (const { name, result } of toolCallLog) {
+    if (!result?.success) continue;
+
+    if (name === "searchProducts" && result.products?.length) {
+      products = result.products;
+    }
+    if (name === "getProduct" && result.product) {
+      products = [result.product];
+    }
+    if (name === "getCart") {
+      cart = { items: result.items || [], total: result.total || 0 };
+    }
+    if (name === "addToCart") {
+      if (result.product) {
+        products = [result.product];
       }
-      messages.push(assistant);
-      const calls = assistant?.tool_calls || [];
+      if (result.cartItem) {
+        cart = {
+          items: [{
+            product: result.product || { id: result.cartItem.productId },
+            quantity: result.cartItem.quantity || 1,
+          }],
+          itemCount: result.cartItem.quantity || 1,
+        };
+      }
+    }
+    if (name === "getOrderStatus") {
+      order = result.order || (result.orders ? { orders: result.orders } : null);
+    }
+    if (name === "searchKnowledge" && result.citations?.length) {
+      citations = result.citations;
+      usedRag   = true;
+    }
+  }
 
-      const hasRemovalCall = calls.some(
-        (call) => call.function?.name === "removeFromCart",
-      );
-      if (removalRequest && !removalHandled && !hasRemovalCall) {
-        removalHandled = true;
-        messages[messages.length - 1] = { role: "assistant", content: "" };
-        removalResult = await removeFromCart({
-          productName: removalRequest,
-          userId,
-          CartModel,
-        });
-        messages.push({
-          role: "tool",
-          tool_name: "removeFromCart",
-          content: JSON.stringify(removalResult),
-        });
+  return { products, cart, order, citations, toolsUsed, usedRag };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * runAgent — Execute one agent turn with full tool-calling loop.
+ *
+ * @param {string}   userMessage   Current user input (already sanitised by controller)
+ * @param {object[]} history       Bounded history from conversationMemory
+ * @param {object}   ctx           { userId, conversationId, requestId }
+ *
+ * @returns {Promise<AgentResult>}
+ */
+async function runAgent(userMessage, history = [], ctx = {}) {
+  const { requestId = "unknown", userId } = ctx;
+  const startMs = Date.now();
+
+  // ── Validate ───────────────────────────────────────────────────────────────
+  if (!userMessage?.trim()) throw new Error("userMessage must be a non-empty string");
+  if (userMessage.length > agentConfig.maxUserMessageLength) {
+    throw new Error(`Message too long (max ${agentConfig.maxUserMessageLength} chars)`);
+  }
+
+  aiLogger.agentStart(requestId, userId, userMessage);
+
+  // ── Setup ──────────────────────────────────────────────────────────────────
+  const llm      = getLLM();
+  const tools    = buildTools(ctx);
+  const llmWithTools = llm.bindTools(tools);
+
+  // Build a tool map for fast lookup during execution
+  const toolMap  = Object.fromEntries(tools.map((t) => [t.name, t]));
+
+  let messages   = buildMessages(userMessage, history);
+  let iterations = 0;
+  const toolCallLog = []; // { name, input, result }
+
+  // ── ReAct loop ─────────────────────────────────────────────────────────────
+  while (iterations < agentConfig.maxIterations) {
+    iterations++;
+
+    // Invoke LLM with timeout guard
+    let response;
+    try {
+      response = await Promise.race([
+        llmWithTools.invoke(messages),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Agent request timed out")),
+            agentConfig.requestTimeoutMs
+          )
+        ),
+      ]);
+    } catch (err) {
+      aiLogger.error("agent.llm_invoke_error", { requestId, iteration: iterations, error: err.message });
+      throw err;
+    }
+
+    // If the model returned no tool calls → it's the final answer, exit loop
+    if (!response.tool_calls || response.tool_calls.length === 0) {
+      messages.push(response);
+      break;
+    }
+
+    // ── Execute tool calls ───────────────────────────────────────────────────
+    messages.push(response); // Append AI message with tool_call requests
+
+    for (const toolCall of response.tool_calls) {
+      const tool = toolMap[toolCall.name];
+
+      if (!tool) {
+        aiLogger.warn("agent.unknown_tool", { requestId, toolName: toolCall.name });
+        messages.push(
+          new ToolMessage({
+            content:      JSON.stringify({ success: false, message: `Unknown tool: ${toolCall.name}` }),
+            tool_call_id: toolCall.id,
+            name:         toolCall.name,
+          })
+        );
         continue;
       }
 
-      if (!calls.length) {
-        const text = assistant?.content?.trim();
-        if (text) {
-          return {
-            message: text,
-            products,
-            sessionId,
-          };
-        }
-        break;
+      // Execute the tool — result is always a JSON string
+      let toolResult;
+      try {
+        toolResult = await tool.invoke(toolCall.args || {});
+      } catch (err) {
+        aiLogger.error("agent.tool_exec_error", { requestId, toolName: toolCall.name, error: err.message });
+        toolResult = JSON.stringify({ success: false, message: "Tool execution failed" });
       }
 
-      for (const call of calls) {
-        const name = call.function?.name;
-        const rawArgs = call.function?.arguments || {};
-        const args = typeof rawArgs === "string" ? JSON.parse(rawArgs) : rawArgs;
-        const handler = handlers[name];
-        let result;
-        try {
-          result =
-            name === "removeFromCart" && removalResult
-              ? removalResult
-              : handler
-                ? await handler({ ...args, userId, ProductModel, CartModel })
-                : { error: `Unknown tool: ${name}` };
-        } catch (error) {
-          result = { error: error.message };
-        }
-        if (name === "removeFromCart" && !removalResult) {
-          removalResult = result;
-        }
-        if (result && result.products) products.push(...result.products);
-        messages.push({
-          role: "tool",
-          tool_name: name,
-          content: JSON.stringify(result),
-        });
-      }
+      const parsed = parseToolResult(toolResult);
+      toolCallLog.push({ name: toolCall.name, input: toolCall.args, result: parsed });
+
+      messages.push(
+        new ToolMessage({
+          content:      toolResult,
+          tool_call_id: toolCall.id,
+          name:         toolCall.name,
+        })
+      );
     }
-  } catch (error) {
-    console.warn("runAgent error:", error.message);
+    // Loop continues → model sees tool results and decides whether to call more tools or respond
   }
 
-  // Graceful fallback when LLM is unavailable in production or does not return text
-  if (removalRequest && !removalHandled) {
-    const res = await removeFromCart({
-      productName: removalRequest,
-      userId,
-      CartModel,
-    });
-    return {
-      message: res.message || res.error || "Cart updated successfully.",
-      products: [],
-      sessionId,
-    };
+  // Extract final text — LangChain may return content as string OR as an array of parts
+  const lastMessage  = messages[messages.length - 1];
+  let responseText = "";
+  if (typeof lastMessage?.content === "string") {
+    responseText = lastMessage.content;
+  } else if (Array.isArray(lastMessage?.content)) {
+    // Gemini sometimes returns [{type:"text", text:"..."}]
+    responseText = lastMessage.content
+      .filter((p) => p?.type === "text" || typeof p === "string")
+      .map((p)  => (typeof p === "string" ? p : p.text))
+      .join("");
+  }
+  if (!responseText) {
+    responseText = "I'm sorry, I wasn't able to generate a response. Please try again.";
   }
 
-  if (products.length === 0 && ProductModel) {
-    try {
-      const searchRes = await searchProducts({ query, ProductModel });
-      if (searchRes?.products?.length) {
-        products.push(...searchRes.products);
-      }
-    } catch (e) {
-      console.warn("searchProducts fallback error:", e.message);
-    }
-  }
+  const { products, cart, order, citations, toolsUsed, usedRag } =
+    extractStructuredData(toolCallLog);
 
-  const isGreeting = /^(hi|hello|hey|namaste|pranam|good\s+(morning|evening|afternoon)|hola)/i.test(
-    (query || "").trim(),
-  );
-
-  let fallbackMessage = "";
-  if (isGreeting) {
-    fallbackMessage =
-      "नमस्ते! 🙏 STM Fruit Shop में आपका स्वागत है। मैं ताजे फल, ड्राई फ्रूट्स, जूस, केक और डेकोरेशन से जुड़े सवालों में आपकी मदद कर सकता हूं। आप क्या देखना चाहते हैं?";
-  } else if (products.length > 0) {
-    fallbackMessage = `यहाँ STM Fruit Shop से आपके लिए कुछ बेहतरीन विकल्प हैं: ${products
-      .slice(0, 3)
-      .map((p) => p.name)
-      .join(", ")}। आप इनमें से किसी पर भी क्लिक करके देख सकते हैं या कार्ट में जोड़ सकते हैं! 🍎`;
-  } else {
-    fallbackMessage =
-      "STM Fruit Shop में आपका स्वागत है! ताजे फल, ड्राई फ्रूट्स, जूस और बर्थडे केक के लिए आप हमसे WhatsApp (+91 9142517255) पर भी संपर्क कर सकते हैं। 🍎";
-  }
+  const durationMs = Date.now() - startMs;
+  aiLogger.agentEnd(requestId, durationMs, toolsUsed, usedRag);
 
   return {
-    message: fallbackMessage,
+    message:   responseText,
     products,
-    sessionId,
+    cart,
+    order,
+    citations,
+    toolsUsed,
+    usedRag,
   };
 }
 
-module.exports = { runAgent, toolDefinitions };
+module.exports = { runAgent };

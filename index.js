@@ -1,9 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-require("dotenv").config();
+require("dotenv").config(); // loaded environment variables & models
 
-const router = require("./routes");
+const router   = require("./routes");
+const aiRouter = require("./routes/aiRoutes");
 const connectDB = require("./config/db");
 
 const app = express();
@@ -16,13 +17,12 @@ function ensureDatabaseConnection() {
       throw error;
     });
   }
-
   return databaseConnectionPromise;
 }
 
 app.set("trust proxy", 1);
 
-// Permissive dynamic CORS middleware
+// Allowed origins — edit this list to add/remove domains
 const allowedOrigins = [
   "https://e-commerce-fronted-gamma.vercel.app",
   "https://stmfruitshop.theartforever.com",
@@ -30,34 +30,14 @@ const allowedOrigins = [
   "http://localhost:3000",
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  }
-
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token",
-  );
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  next();
-});
-
+// Single, clean CORS setup
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, true);
+      // Allow requests with no origin (server-to-server, mobile apps, curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -69,14 +49,13 @@ app.use(
       "Origin",
       "X-CSRF-Token",
     ],
-  }),
+  })
 );
 
 app.use(express.json());
 app.use(cookieParser());
 
-// Serverless deployments import this app instead of running startServer().
-// Establish the shared MongoDB connection before handling those requests.
+// Lazy MongoDB connection — established once, reused on every request
 app.use(async (req, res, next) => {
   try {
     await ensureDatabaseConnection();
@@ -86,41 +65,38 @@ app.use(async (req, res, next) => {
   }
 });
 
+// Health-check / warm-up ping
 app.get("/api/ping", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "pong",
-    timestamp: Date.now(),
-  });
+  res.status(200).json({ success: true, message: "pong", timestamp: Date.now() });
 });
 
 app.use("/api", router);
+app.use("/api/ai", aiRouter);  // AI assistant routes
 
+// Global error handler
 app.use((err, req, res, next) => {
+  // Surface CORS errors clearly
+  if (err.message && err.message.startsWith("CORS:")) {
+    return res.status(403).json({ success: false, message: err.message });
+  }
   console.error("Global Error:", err);
-
-  res.status(500).json({
-    success: false,
-    message: "Internal Server Error",
-  });
+  res.status(500).json({ success: false, message: "Internal Server Error" });
 });
 
 async function startServer() {
   const port = Number(process.env.PORT) || 8080;
-
   try {
     await ensureDatabaseConnection();
     app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
+      console.log(`Server running on port ${port}`);
     });
   } catch (error) {
-    console.error("Unable to start the server:", error.message);
+    console.error("Unable to start server:", error.message);
     process.exit(1);
   }
 }
 
-// Vercel imports the Express app. Only open a local HTTP server when this file
-// is executed directly (for example, with `npm start` or `npm run dev`).
+// Only open an HTTP server when run directly (not on Vercel)
 if (require.main === module) {
   startServer();
 }
